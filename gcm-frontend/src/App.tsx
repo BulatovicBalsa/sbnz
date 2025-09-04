@@ -7,6 +7,7 @@ import { ActionPanel } from './components/ActionPanel';
 import { SuggestionBox } from './components/SuggestionBox';
 import { useReconnectingWS } from './hooks/useReconnectingWS';
 import {Button} from "@/components/ui/button.tsx";
+import {ThemeProvider} from "@/components/theme-provider.tsx";
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
 const SUG_WS = import.meta.env.VITE_SUG_WS as string | undefined; // e.g. ws://localhost:8000/ws/suggestions
@@ -14,7 +15,11 @@ const SUG_WS = import.meta.env.VITE_SUG_WS as string | undefined; // e.g. ws://l
 export default function App() {
     const { user } = useAuth();
     if (!user) return <Shell><Content><div /></Content></Shell>; // rendered via LoginPage route in main
-    return <Dashboard />;
+    return (
+        <ThemeProvider defaultTheme='dark' storageKey='vite-ui-theme'>
+            <Dashboard />
+        </ThemeProvider>
+    );
 }
 
 function Dashboard() {
