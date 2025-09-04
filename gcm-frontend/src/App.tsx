@@ -6,6 +6,7 @@ import { GlucoseChart } from './components/GlucoseChart';
 import { ActionPanel } from './components/ActionPanel';
 import { SuggestionBox } from './components/SuggestionBox';
 import { useReconnectingWS } from './hooks/useReconnectingWS';
+import {Button} from "@/components/ui/button.tsx";
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
 const SUG_WS = import.meta.env.VITE_SUG_WS as string | undefined; // e.g. ws://localhost:8000/ws/suggestions
@@ -137,7 +138,7 @@ function TopBar({ name, onLogout }: { name: string; onLogout: () => void }) {
                 <div className="font-bold tracking-wide">GCM</div>
                 <div className="flex items-center gap-3">
                     <div className="opacity-80">{name}</div>
-                    <button className="btn" onClick={onLogout}>Logout</button>
+                    <Button variant="outline" onClick={onLogout}>Logout</Button>
                 </div>
             </div>
         </div>
