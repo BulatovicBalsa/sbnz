@@ -8,6 +8,10 @@ import { SuggestionBox } from './components/SuggestionBox';
 import { useReconnectingWS } from './hooks/useReconnectingWS';
 import {Button} from "@/components/ui/button.tsx";
 import {ThemeProvider} from "@/components/theme-provider.tsx";
+import {Separator} from "@/components/ui/separator.tsx";
+// in Dashboard (App.tsx)
+import { REAL_INTERVAL, SIM_INTERVAL } from "@/utils/time";
+
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
 const SUG_WS = import.meta.env.VITE_SUG_WS as string | undefined; // e.g. ws://localhost:8000/ws/suggestions
@@ -23,8 +27,9 @@ export default function App() {
 }
 
 function Dashboard() {
+    const HOUR = 60 * 60 * 1000;               // 1h (used by chart domain)
+    const [simNow, setSimNow] = useState(() => Date.now());
     const { user, logout } = useAuth();
-    const [hours, setHours] = useState(6);
 
     // Glucose stream
     const [samples, setSamples] = useState<GlucoseSample[]>([]);
@@ -72,19 +77,6 @@ function Dashboard() {
         };
     }, [sugWS, USE_MOCK]);
 
-    // Mock streams for development
-    useEffect(() => {
-        if (!USE_MOCK) return;
-        // generate CGM every 5s
-        let current = 6.5 + (Math.random() - 0.5);
-        const id = setInterval(() => {
-            current += (Math.random() - 0.5) * 0.3; // random walk
-            current = Math.max(2.5, Math.min(15.5, current));
-            setSamples(prev => [...prev, { t: Date.now(), mmol: Number(current.toFixed(1)) }]);
-        }, 5000);
-        return () => clearInterval(id);
-    }, [USE_MOCK]);
-
     useEffect(() => {
         if (!USE_MOCK) return;
         const id = setInterval(() => {
@@ -94,8 +86,48 @@ function Dashboard() {
                 'Bolus correction 1u suggested',
                 'Hydrate: 200ml water'
             ];
-            setSuggestion({ at: Date.now(), text: texts[Math.floor(Math.random() * texts.length)] });
+            setSuggestion({ at: simNow, text: texts[Math.floor(Math.random() * texts.length)] });
         }, 30000);
+        return () => clearInterval(id);
+    }, [USE_MOCK, simNow]);
+
+
+    useEffect(() => {
+        if (!USE_MOCK) return;
+
+        const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+        // 1) seed past 1h
+        const baseNow = Date.now();
+        const history: GlucoseSample[] = [];
+        let mmol = 6.5;
+
+        for (let i = 12; i > 0; i--) {            // 12 * 5min = 60min
+            const t = baseNow - i * SIM_INTERVAL;
+            mmol += (Math.random() - 0.5) * 1.3;     // random walk
+            mmol = clamp(mmol, 3, 12);
+            history.push({ t, mmol: +mmol.toFixed(1) });
+        }
+
+        setSamples(history);
+        setSimNow(baseNow);
+        // keep mmol in this closure, initialized to last seeded value
+        mmol = history.at(-1)?.mmol ?? mmol;
+
+        // 2) start accelerated ticking (30s real → +5min sim)
+        const tick = () => {
+            setSimNow(prevNow => {
+                const nextNow = prevNow + SIM_INTERVAL;
+                mmol += (Math.random() - 0.5) * 1.3;
+                mmol = clamp(mmol, 3, 12);
+                const nextSample: GlucoseSample = { t: nextNow, mmol: +mmol.toFixed(1) };
+                setSamples(prev => [...prev, nextSample]); // append first
+                return nextNow;                             // then pan domain
+            });
+        };
+
+        tick();                               // immediate first point
+        const id = setInterval(tick, REAL_INTERVAL);
         return () => clearInterval(id);
     }, [USE_MOCK]);
 
@@ -103,29 +135,18 @@ function Dashboard() {
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     function addEvent(e: TimelineEvent) { setEvents(prev => [...prev, e]); }
 
-
     const trend = calcTrend(samples);
 
     return (
         <Shell>
-            <TopBar name={`${user!.name} ${user!.surname}`} onLogout={logout} />
+            <TopBar name={`${user!.name} ${user!.surname}`} onLogout={logout} simNow={simNow} />
             <Content>
-                <div className="grid gap-4 md:grid-cols-[240px_1fr_300px]">
-                    <div className="space-y-4">
-                        <SuggestionBox current={suggestion} />
-                        <div className="bg-zinc-900/30 rounded-2xl p-4 text-sm">
-                            <div className="font-semibold mb-2">Status</div>
-                            <div>CGM: {glConnected || USE_MOCK ? 'connected' : 'offline'}</div>
-                            <div>Suggestions: {sugConnected || USE_MOCK ? 'connected' : 'offline'}</div>
-                        </div>
-                    </div>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <div className="text-xl font-semibold">Glucose (last <input className="w-14 text-center" type="number" min={1} max={48} value={hours} onChange={e => setHours(Number(e.target.value)||6)} /> h) — Trend {trend}</div>
-                        </div>
-                        <GlucoseChart data={samples} hours={hours} events={events} />
-                    </div>
+                <div className="space-y-6">
                     <ActionPanel onAdd={addEvent} />
+                    <Separator />
+                    <GlucoseChart data={samples} trend={trend} simNow={simNow} />
+                    <Separator />
+                    <SuggestionBox current={suggestion} />
                 </div>
             </Content>
         </Shell>
@@ -136,12 +157,16 @@ function Shell({ children }: { children: React.ReactNode }) { return <div classN
 function Content({ children }: { children: React.ReactNode }) { return <div className="max-w-6xl mx-auto p-4 md:p-6">{children}</div>; }
 
 
-function TopBar({ name, onLogout }: { name: string; onLogout: () => void }) {
+function TopBar({ name, onLogout, simNow }: { name: string; onLogout: () => void; simNow: number }) {
     return (
-        <div className="sticky top-0 z-10 backdrop-blur bg-zinc-950/70 border-b border-zinc-800">
+        <div className="sticky top-0 z-10 backdrop-blur bg-background/70 border-b">
             <div className="max-w-6xl mx-auto p-3 flex items-center justify-between">
                 <div className="font-bold tracking-wide">GCM</div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-6">
+                    {/* accelerated clock */}
+                    <div className="font-mono opacity-80">
+                        {new Date(simNow).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                    </div>
                     <div className="opacity-80">{name}</div>
                     <Button variant="outline" onClick={onLogout}>Logout</Button>
                 </div>
