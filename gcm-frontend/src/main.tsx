@@ -1,0 +1,21 @@
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './style.css';
+import { AuthProvider, useAuth } from './auth';
+import { LoginPage } from './pages/LoginPage';
+
+
+function Root() {
+    const { user } = useAuth();
+    return user ? <App /> : <LoginPage />;
+}
+
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+        <AuthProvider>
+            <Root />
+        </AuthProvider>
+    </React.StrictMode>,
+);
