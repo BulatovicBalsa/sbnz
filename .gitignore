@@ -1,0 +1,23 @@
+# Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+**/logs/
+**/*.log
+**/*.tmp
+**/*.bak
+**/*.swp
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# OS files
+.DS_Store
+Thumbs.db
