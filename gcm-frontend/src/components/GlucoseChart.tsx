@@ -5,7 +5,7 @@ import {
     Line,
     LineChart,
     XAxis,
-    ReferenceLine, YAxis, Customized,
+    ReferenceLine, YAxis, Customized, ReferenceArea,
 } from "recharts"
 import {
     Card,
@@ -23,6 +23,7 @@ import type { GlucoseSample, TimelineEvent  } from "@/types"
 import {Separator} from "@/components/ui/separator.tsx";
 import FoodHover from "@/components/chart/hover/FoodHover.tsx";
 import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
+import ActivityHover from "@/components/chart/hover/ActivityHover.tsx";
 
 type Props = {
     data: GlucoseSample[]
@@ -37,6 +38,27 @@ const chartConfig = {
         color: "var(--chart-1)",
     },
 } satisfies ChartConfig
+
+const parseFoodMacrosFromLabel = (label?: string) => {
+    if (!label) return { carbs: undefined as number | undefined, fats: undefined as number | undefined };
+    const carbs = label.match(/([\d.]+)\s*g\s*carbs/i)?.[1];
+    const fats  = label.match(/([\d.]+)\s*g\s*fats?/i)?.[1];
+    return { carbs: carbs ? Number(carbs) : undefined, fats: fats ? Number(fats) : undefined };
+};
+
+const parseActivity = (e: TimelineEvent) => {
+    const start = e.at;
+    const durationMin = Number(e.amount ?? 0);
+    const end = start + durationMin * 60_000;
+    const intensity = /^(LOW|MED|HIGH)/i.exec(String(e.label ?? ""))?.[1]?.toUpperCase() as "LOW"|"MED"|"HIGH"|undefined;
+    return { id: e.id, start, end, durationMin, intensity: intensity ?? "LOW" as const };
+};
+
+const ACTIVITY_COLORS: Record<"LOW"|"MED"|"HIGH", { stroke: string; fill: string }> = {
+    LOW: { stroke: "#10B981", fill: "#10B981" }, // emerald-500
+    MED: { stroke: "#F59E0B", fill: "#F59E0B" }, // amber-500
+    HIGH:{ stroke: "#EF4444", fill: "#EF4444" }, // red-500
+};
 
 export function GlucoseChart({ data, trend, simNow, events }: Props) {
     const [activeChart] =
@@ -59,14 +81,6 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
       [events]
     )
 
-    // Parse "... 34g carbs • 12.5g fats" from FoodEvent label (fallback if amount isn't set)
-    const parseFoodMacrosFromLabel = (label?: string) => {
-        if (!label) return { carbs: undefined as number | undefined, fats: undefined as number | undefined };
-        const carbs = label.match(/([\d.]+)\s*g\s*carbs/i)?.[1];
-        const fats  = label.match(/([\d.]+)\s*g\s*fats?/i)?.[1];
-        return { carbs: carbs ? Number(carbs) : undefined, fats: fats ? Number(fats) : undefined };
-    };
-
     const food = React.useMemo(
         () =>
             (events ?? [])
@@ -77,6 +91,15 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                     const carbs = Number.isFinite(Number(e.amount)) ? Number(e.amount) : parsed.carbs;
                     return { id: e.id, at: e.at, label: e.label as string, carbs, fats: parsed.fats };
                 }),
+        [events]
+    );
+
+    const activities = React.useMemo(
+        () =>
+            (events ?? [])
+                .filter(e => e.type === "ACTIVITY" && (e.amount ?? 0) > 0)
+                .map(parseActivity)
+                .filter(a => a.end > a.start),
         [events]
     );
 
@@ -110,12 +133,12 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
             <CardContent className="px-2 sm:p-6">
                 <ChartContainer
                     config={chartConfig}
-                    className="aspect-auto h-[250px] w-full"
+                    className="aspect-auto h-[450px] w-full"
                 >
                     <LineChart
                         accessibilityLayer
                         data={chartData}
-                        margin={{ left: 12, right: 12, bottom: 42 }}
+                        margin={{ left: 12, right: 12, bottom: 60 }}
                     >
                     <CartesianGrid vertical={false} />
                         <XAxis
@@ -182,50 +205,100 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
 
                         <Customized
                             component={(props: any) => {
-                                if (!food.length && !insulin.length) return null;
+                                if ((!food?.length && !insulin?.length) && !activities?.length) return null;
+
                                 const { xAxisMap, offset } = props;
                                 const xKey = Object.keys(xAxisMap)[0];
                                 const xScale = xAxisMap[xKey]?.scale;
                                 if (!xScale) return null;
 
-                                const baseY = offset.top + offset.height; // X-axis baseline
+                                // Layout
+                                const LANE_HEIGHT = 18;
+                                const baseY = offset.top + offset.height + 2;
+                                const laneY = (lane: number) => baseY + lane * LANE_HEIGHT;
+
+                                // Clamp x positions to plotting area
+                                const xMin = offset.left;
+                                const xMax = offset.left + offset.width;
+                                const clamp = (x: number) => Math.max(xMin, Math.min(xMax, x));
+
+                                // --- De-overlap helpers for point events (Food/Insulin)
+                                const BUCKET_MS = 60 * 1000;
+                                const groupByMinute = <T extends { at: number }>(items: T[]) => {
+                                    const map = new Map<number, T[]>();
+                                    for (const it of items) {
+                                        const k = Math.round(it.at / BUCKET_MS);
+                                        (map.get(k) ?? map.set(k, []).get(k)!).push(it);
+                                    }
+                                    return [...map.values()];
+                                };
+                                const renderGroup = (items: any[], lane: number, render: (item: any, x: number, y: number, idx: number) => React.ReactNode) => {
+                                    const spread = 12;
+                                    const y = laneY(lane);
+                                    const xs = items.map(it => xScale(it.at)).filter((x: number) => Number.isFinite(x));
+                                    if (!xs.length) return null;
+                                    const center = xs.reduce((a: number, b: number) => a + b, 0) / xs.length;
+                                    const start = center - ((items.length - 1) * spread) / 2;
+                                    return items.map((it, i) => render(it, clamp(start + i * spread), y, i));
+                                };
 
                                 return (
                                     <g>
-                                        {/* Food icons */}
-                                        {food.map(f => {
-                                            const x = xScale(f.at);
-                                            if (x == null || Number.isNaN(x)) return null;
-                                            if (f.at < simNow - 60 * 60 * 1000 || f.at > simNow + 60 * 60 * 1000) return null;
-                                            return (
+                                        {/* Lane 0: INSULIN (icons) */}
+                                        {groupByMinute(insulin).map((grp, gi) =>
+                                            renderGroup(grp, 0, (it, x, y) => (
                                                 <foreignObject
-                                                    key={`food-${f.id}`}
-                                                    x={x - 8}
-                                                    y={baseY + 2}
+                                                    key={`ins-${it.id}-${gi}`}
+                                                    x={x - 11}
+                                                    y={y}
                                                     width={16}
                                                     height={16}
                                                     style={{ overflow: "visible", pointerEvents: "auto" }}
                                                 >
-                                                    <FoodHover at={f.at} carbs={f.carbs} fats={f.fats} />
+                                                    <InsulinHover at={it.at} units={it.units} />
                                                 </foreignObject>
-                                            );
-                                        })}
+                                            ))
+                                        )}
 
-                                        {/* Insulin icons */}
-                                        {insulin.map(i => {
-                                            const x = xScale(i.at);
-                                            if (x == null || Number.isNaN(x)) return null;
-                                            if (i.at < simNow - 60 * 60 * 1000 || i.at > simNow + 60 * 60 * 1000) return null;
-                                            return (
+                                        {/* Lane 1: FOOD (icons) */}
+                                        {groupByMinute(food).map((grp, gi) =>
+                                            renderGroup(grp, 1, (it, x, y) => (
                                                 <foreignObject
-                                                    key={`ins-${i.id}`}
-                                                    x={x - 8}
-                                                    y={baseY + 24}
+                                                    key={`food-${it.id}-${gi}`}
+                                                    x={x - 11}
+                                                    y={y}
                                                     width={16}
                                                     height={16}
                                                     style={{ overflow: "visible", pointerEvents: "auto" }}
                                                 >
-                                                    <InsulinHover at={i.at} units={i.units} />
+                                                    <FoodHover at={it.at} carbs={it.carbs} fats={it.fats} />
+                                                </foreignObject>
+                                            ))
+                                        )}
+
+                                        {/* Lane 2: ACTIVITY (interval bar) */}
+                                        {activities.map(a => {
+                                            const x1 = clamp(xScale(a.start));
+                                            const x2 = clamp(xScale(a.end));
+                                            const width = Math.max(8, x2 - x1);
+                                            const y = laneY(2) + (LANE_HEIGHT - 8) / 2; // center a 8px bar
+                                            const color = ACTIVITY_COLORS[a.intensity].fill;
+                                            return (
+                                                <foreignObject
+                                                    key={`act-${a.id}`}
+                                                    x={x1}
+                                                    y={y}
+                                                    width={width}
+                                                    height={8}
+                                                    style={{ overflow: "visible", pointerEvents: "auto" }}
+                                                >
+                                                    <ActivityHover
+                                                        start={a.start}
+                                                        end={a.end}
+                                                        intensity={a.intensity}
+                                                        durationMin={a.durationMin}
+                                                        color={color}
+                                                    />
                                                 </foreignObject>
                                             );
                                         })}
@@ -260,6 +333,23 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                                 />
                             )})
                         }
+
+                        {activities.map(a => {
+                            const color = ACTIVITY_COLORS[a.intensity];
+                            return (
+                                <ReferenceArea
+                                    key={`band-${a.id}`}
+                                    x1={a.start}
+                                    x2={a.end}
+                                    y1={1.9}
+                                    y2={23.0}
+                                    stroke={color.stroke}
+                                    strokeOpacity={0.4}
+                                    fill={color.fill}
+                                    fillOpacity={0.12}
+                                />
+                            );
+                        })}
 
                         <Line
                             dataKey={activeChart}
