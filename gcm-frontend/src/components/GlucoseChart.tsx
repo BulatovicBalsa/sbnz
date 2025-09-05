@@ -36,6 +36,9 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
+const formatClock = (t: number) =>
+    new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
 export function GlucoseChart({ data, trend, simNow, events }: Props) {
     const [activeChart] =
         React.useState<keyof typeof chartConfig>("glucose")
@@ -56,6 +59,21 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
           .map(e => ({ id: e.id, at: e.at, units: Number(e.amount) })),
       [events]
     )
+
+    // hovered timestamp (x)
+    const [hoverTs, setHoverTs] = React.useState<number | null>(null);
+
+    // insulin near hovered x (±5 minutes)
+    const NEAR_MS = 5 * 60 * 1000;
+    const nearInsulin = React.useMemo(
+        () =>
+            hoverTs == null
+                ? []
+                : insulin
+                    .filter(i => Math.abs(i.at - hoverTs) <= NEAR_MS)
+                    .sort((a, b) => a.at - b.at),
+        [NEAR_MS, hoverTs, insulin]
+    );
 
     return (
         <Card className="py-4 sm:py-0">
@@ -93,8 +111,15 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         accessibilityLayer
                         data={chartData}
                         margin={{ left: 12, right: 12 }}
+                        onMouseMove={(state) => {
+                            // activeLabel is the numeric X (timestamp) when XAxis type="number"
+                            if (state && typeof state.activeLabel === "number") {
+                                setHoverTs(state.activeLabel);
+                            }
+                        }}
+                        onMouseLeave={() => setHoverTs(null)}
                     >
-                        <CartesianGrid vertical={false} />
+                    <CartesianGrid vertical={false} />
                         <XAxis
                             dataKey="date"
                             type="number"
@@ -161,15 +186,10 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                             <ReferenceLine
                                 key={i.id}
                                 x={i.at}
-                                stroke="#8B5CF6"              // violet
+                                stroke="#8B5CF6"
                                 strokeDasharray="4 4"
                                 ifOverflow="extendDomain"
-                                label={{
-                                    value: `${i.units}U`,
-                                    position: "top",
-                                    fill: "#8B5CF6",
-                                    fontSize: 11,
-                                }}
+                                label={{ value: `${i.units}U`, position: "top", fill: "#8B5CF6", fontSize: 11 }}
                             />
                         ))}
 
@@ -194,6 +214,30 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         />
                     </LineChart>
                 </ChartContainer>
+
+                {/* Bottom insulin info bar */}
+                <div className="mt-2 text-xs text-muted-foreground">
+                    {hoverTs == null ? (
+                        <span>Hover the chart to see insulin near a time.</span>
+                    ) : nearInsulin.length === 0 ? (
+                        <span>{formatClock(hoverTs)} — no insulin in ±5 min.</span>
+                    ) : (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="opacity-80">{formatClock(hoverTs)}</span>
+                            {nearInsulin.map(i => (
+                                <span
+                                    key={i.id}
+                                    className="rounded-full border px-2 py-0.5"
+                                    title={`at ${formatClock(i.at)}`}
+                                    style={{ borderColor: "#8B5CF6", color: "#8B5CF6" }}
+                                >
+                                  {i.units}U @ {formatClock(i.at)}
+                                </span>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
             </CardContent>
         </Card>
     )
