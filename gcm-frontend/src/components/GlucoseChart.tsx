@@ -24,13 +24,16 @@ import {Separator} from "@/components/ui/separator.tsx";
 import FoodHover from "@/components/chart/hover/FoodHover.tsx";
 import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
 import ActivityHover from "@/components/chart/hover/ActivityHover.tsx";
+import {getTimeNow} from "@/utils/time.ts";
 
 type Props = {
     data: GlucoseSample[]
     trend: "↑" | "↓" | "→" // backend-provided
-    simNow: number // for demo purposes only
+    simNow?: number // for demo purposes only
     events?: TimelineEvent[] // for insulin markers (not implemented here)
 }
+
+const HOUR_MS = 60 * 60 * 1000;
 
 const chartConfig = {
     glucose: {
@@ -103,6 +106,10 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
         [events]
     );
 
+    const now = simNow ?? getTimeNow();
+    const minDomain = now - HOUR_MS;
+    const maxDomain = now + HOUR_MS;
+
     return (
         <Card className="py-4 sm:py-0">
             <CardHeader className="flex flex-col items-stretch border-b !p-0 sm:flex-row">
@@ -145,8 +152,8 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                             dataKey="date"
                             type="number"
                             domain={[
-                                simNow - 60 * 60 * 1000,
-                                simNow + 60 * 60 * 1000,
+                                minDomain,
+                                maxDomain,
                             ]}
                             tickLine={false}
                             axisLine={false}
@@ -308,7 +315,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         />
 
                         {insulin.map(i => {
-                            if (i.at < simNow - 60 * 60 * 1000 || i.at > simNow + 60 * 60 * 1000) return null;
+                            if (i.at < minDomain || i.at > maxDomain) return null;
                             return (
                                 <ReferenceLine
                                     key={i.id}
@@ -322,7 +329,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         )}
 
                         {food.map(f => {
-                            if (f.at < simNow - 60 * 60 * 1000 || f.at > simNow + 60 * 60 * 1000) return null;
+                            if (f.at < minDomain || f.at > maxDomain) return null;
                             return (
                                 <ReferenceLine
                                     key={f.id}

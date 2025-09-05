@@ -17,7 +17,7 @@ interface Props { onAdd: (evt: TimelineEvent) => void; }
 const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
     const [open, setOpen] = useState(false);
     const [intensity, setIntensity] = useState<Intensity>("LOW");
-    const [start, setStart] = useState(nowLocalIsoMinutes());
+    const [start, setStart] = useState(nowLocalIsoMinutes(10 * 60 * 1000)); // default 10min in future
     const [durationMin, setDurationMin] = useState<string>("30");
 
     // keep min updated on each open

@@ -7,6 +7,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
+import {getTimeNow} from "@/utils/time.ts";
 
 interface Props { onAdd: (evt: TimelineEvent) => void; }
 
@@ -21,7 +22,7 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
             type: "INSULIN" as EventType,
             label: "Insulin shot",
             amount: Number(units),
-            at: Date.now(), // occurs when user inserts it
+            at: getTimeNow()
         };
         onAdd(evt);
         setUnits("");

@@ -6,6 +6,7 @@ import {
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import {type EventType, FOOD_CATALOG, type TimelineEvent} from "@/types.ts";
+import {getTimeNow} from "@/utils/time.ts";
 
 interface Props { onAdd: (evt: TimelineEvent) => void; }
 
@@ -48,7 +49,7 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
             label: `${parts.join(", ")} • ${Math.round(totalCarbs*10)/10}g carbs • ${Math.round(totalFats*10)/10}g fats`,
             // Keep carbs in amount for quick math; adjust if you prefer null
             amount: Math.round(totalCarbs * 10) / 10,
-            at: Date.now(),
+            at: getTimeNow()
         };
         onAdd(evt);
         setCounts({});

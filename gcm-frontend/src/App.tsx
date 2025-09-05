@@ -10,7 +10,7 @@ import {Button} from "@/components/ui/button.tsx";
 import {ThemeProvider} from "@/components/theme-provider.tsx";
 import {Separator} from "@/components/ui/separator.tsx";
 // in Dashboard (App.tsx)
-import { REAL_INTERVAL, SIM_INTERVAL } from "@/utils/time";
+import {getTimeNow, REAL_INTERVAL, SIM_INTERVAL} from "@/utils/time";
 
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
@@ -27,7 +27,7 @@ export default function App() {
 }
 
 function Dashboard() {
-    const [simNow, setSimNow] = useState(() => Date.now());
+    const [simNow, setSimNow] = useState(() => getTimeNow());
     const { user, logout } = useAuth();
 
     // Glucose stream
@@ -103,7 +103,7 @@ function Dashboard() {
         if (!USE_MOCK) return;
 
         // 1) seed past 1h
-        const baseNow = Date.now();
+        const baseNow = getTimeNow();
 
         const history: GlucoseSample[] = [];
         for (let i = 12; i >= 0; i--) {
@@ -114,21 +114,26 @@ function Dashboard() {
         }
 
         setSamples(history);
-        setSimNow(baseNow);
+        setSimNow(getTimeNow());
 
         const intervalId = setInterval(() => {
-            setSimNow(prevSimNow => {
-                const nextTime = prevSimNow + SIM_INTERVAL;
-                const nextSample = createSample(nextTime);
+            const nextTime = getTimeNow();
+            const nextSample = createSample(nextTime);
 
-                console.log(new Date(nextSample.t).toLocaleTimeString(), nextSample.mmol);
+            console.log(new Date(nextSample.t).toLocaleTimeString(), nextSample.mmol);
 
-                setSamples(prev => [...prev.slice(1), nextSample]);
-                return nextTime;
-            });
+            setSamples(prev => [...prev.slice(1), nextSample]);
+            return nextTime;
         }, REAL_INTERVAL);
 
-        return () => clearInterval(intervalId);
+        const intervalClockId = setInterval(() => {
+            setSimNow(getTimeNow());
+        }, 6000);
+
+        return () => {
+            clearInterval(intervalId);
+            clearInterval(intervalClockId);
+        }
     }, [USE_MOCK]);
 
     // Timeline events (from ActionPanel)
@@ -168,7 +173,7 @@ function TopBar({ name, onLogout, simNow }: { name: string; onLogout: () => void
                 <div className="flex items-center gap-6">
                     {/* accelerated clock */}
                     <div className="font-mono opacity-80">
-                        {new Date(simNow).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        {new Date(simNow).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                     </div>
                     <div className="opacity-80">{name}</div>
                     <Button variant="outline" onClick={onLogout}>Logout</Button>
