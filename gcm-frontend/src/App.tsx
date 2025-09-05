@@ -1,6 +1,6 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import { useAuth } from './auth';
-import type { GlucoseSample, SuggestionMessage, TimelineEvent } from './types';
+import {FOOD_CATALOG, type GlucoseSample, type SuggestionMessage, type TimelineEvent} from './types';
 import { calcTrend } from './utils/glucose';
 import { GlucoseChart } from './components/GlucoseChart';
 import { ActionPanel } from './components/ActionPanel';
@@ -135,6 +135,9 @@ function Dashboard() {
     // Timeline events (from ActionPanel)
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     function addEvent(e: TimelineEvent) { setEvents(prev => [...prev, e]); }
+    function createFood(f: { id: string; name: string; carbs: number; fats: number; glycemicIndex: number; }) {
+        FOOD_CATALOG.push(f);
+    }
 
     const trend = calcTrend(samples);
 
@@ -143,7 +146,7 @@ function Dashboard() {
             <TopBar name={`${user!.name} ${user!.surname}`} onLogout={logout} simNow={simNow} />
             <Content>
                 <div className="space-y-6">
-                    <ActionPanel onAdd={addEvent} />
+                    <ActionPanel onAdd={addEvent} onCreateFood={createFood} />
                     <Separator />
                     <GlucoseChart data={samples} trend={trend} simNow={simNow} />
                     <Separator />

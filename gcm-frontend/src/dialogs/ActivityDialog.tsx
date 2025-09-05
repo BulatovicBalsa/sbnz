@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import type { TimelineEvent, EventType } from "@/types";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
-import { nowLocalIsoMinutes, toTs } from "@/utils/datetime";
+import { nowLocalIsoMinutes, isFutureOrNow } from "@/utils/datetime";
 
 type Intensity = "LOW" | "MED" | "HIGH";
 
@@ -20,14 +20,19 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
     const [start, setStart] = useState(nowLocalIsoMinutes());
     const [durationMin, setDurationMin] = useState<string>("30");
 
+    // keep min updated on each open
+    const minStart = useMemo(() => nowLocalIsoMinutes(), [open]);
+
     function submit() {
+        if (!durationMin) return;
+        if (!isFutureOrNow(start)) return; // hard guard: cannot insert in the past
         const duration = Number(durationMin || "0");
         const evt: TimelineEvent = {
             id: crypto.randomUUID(),
             type: "ACTIVITY" as EventType,
             label: `${intensity} activity • ${duration} min`,
-            amount: duration, // keep duration in amount (minutes)
-            at: toTs(start),
+            amount: duration,
+            at: new Date(start).getTime(),
         };
         onAdd(evt);
         setIntensity("LOW"); setStart(nowLocalIsoMinutes()); setDurationMin("30");
@@ -55,8 +60,8 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
                         </Select>
                     </div>
                     <div className="space-y-1.5">
-                        <Label>Start</Label>
-                        <Input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} />
+                        <Label>Start (future only)</Label>
+                        <Input type="datetime-local" min={minStart} value={start} onChange={(e) => setStart(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                         <Label>Duration (min)</Label>
@@ -64,7 +69,7 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
                     </div>
                 </div>
                 <DialogFooter>
-                    <Button onClick={submit} disabled={!durationMin}>Add</Button>
+                    <Button onClick={submit} disabled={!durationMin || !isFutureOrNow(start)}>Add</Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

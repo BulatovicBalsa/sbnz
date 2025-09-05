@@ -7,14 +7,12 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
-import { nowLocalIsoMinutes, toTs } from "@/utils/datetime";
 
 interface Props { onAdd: (evt: TimelineEvent) => void; }
 
 const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
     const [open, setOpen] = useState(false);
     const [units, setUnits] = useState<string>("");
-    const [at, setAt] = useState(nowLocalIsoMinutes());
 
     function submit() {
         if (!units) return;
@@ -23,10 +21,10 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
             type: "INSULIN" as EventType,
             label: "Insulin shot",
             amount: Number(units),
-            at: toTs(at),
+            at: Date.now(), // occurs when user inserts it
         };
         onAdd(evt);
-        setUnits(""); setAt(nowLocalIsoMinutes());
+        setUnits("");
         setOpen(false);
     }
 
@@ -38,15 +36,9 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
                     <DialogTitle>Insulin Shot</DialogTitle>
                     <DialogDescription>Record the number of units taken.</DialogDescription>
                 </DialogHeader>
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                        <Label>Units</Label>
-                        <Input type="number" step="0.5" min="0" value={units} onChange={(e) => setUnits(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                        <Label>Time</Label>
-                        <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-                    </div>
+                <div className="space-y-1.5">
+                    <Label>Units</Label>
+                    <Input type="number" step="1" min="0" value={units} onChange={(e) => setUnits(e.target.value)} />
                 </div>
                 <DialogFooter>
                     <Button onClick={submit} disabled={!units}>Add</Button>

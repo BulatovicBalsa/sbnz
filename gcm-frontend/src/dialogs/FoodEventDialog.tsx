@@ -1,33 +1,35 @@
 import React, { useMemo, useState } from "react";
-import {type TimelineEvent, type EventType, FOOD_CATALOG} from "@/types";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
-import { nowLocalIsoMinutes, toTs } from "@/utils/datetime";
+import {type EventType, FOOD_CATALOG, type TimelineEvent} from "@/types.ts";
 
-interface Props {
-    onAdd: (evt: TimelineEvent) => void;
-}
+interface Props { onAdd: (evt: TimelineEvent) => void; }
 
 const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
     const [open, setOpen] = useState(false);
     const [counts, setCounts] = useState<Record<string, number>>({});
-    const [at, setAt] = useState(nowLocalIsoMinutes());
 
     const total = useMemo(() => Object.values(counts).reduce((a, b) => a + b, 0), [counts]);
-    const totalCarbs = useMemo(() =>
-        Object.entries(counts).reduce((sum, [id, qty]) => {
-            const item = FOOD_CATALOG.find(f => f.id === id);
-            return sum + (item ? item.carbs * qty : 0);
-        }, 0), [counts]);
+    const { totalCarbs, totalFats } = useMemo(() => {
+        return Object.entries(counts).reduce(
+            (acc, [id, qty]) => {
+                const item = FOOD_CATALOG.find(f => f.id === id);
+                if (item) {
+                    acc.totalCarbs += item.carbs * qty;
+                    acc.totalFats += item.fats * qty;
+                }
+                return acc;
+            },
+            { totalCarbs: 0, totalFats: 0 }
+        );
+    }, [counts]);
 
-    const inc = (id: string) => setCounts((m) => ({ ...m, [id]: (m[id] ?? 0) + 1 }));
-    const dec = (id: string) => setCounts((m) => {
+    const inc = (id: string) => setCounts(m => ({ ...m, [id]: (m[id] ?? 0) + 1 }));
+    const dec = (id: string) => setCounts(m => {
         const v = (m[id] ?? 0) - 1;
         const next = { ...m };
         if (v <= 0) delete next[id]; else next[id] = v;
@@ -43,14 +45,13 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
         const evt: TimelineEvent = {
             id: crypto.randomUUID(),
             type: "FOOD" as EventType,
-            label: parts.join(", "),
-            // if you want, you can keep total carbs in amount for fast math
+            label: `${parts.join(", ")} • ${Math.round(totalCarbs*10)/10}g carbs • ${Math.round(totalFats*10)/10}g fats`,
+            // Keep carbs in amount for quick math; adjust if you prefer null
             amount: Math.round(totalCarbs * 10) / 10,
-            at: toTs(at),
+            at: Date.now(), // occurs when user inserts it
         };
         onAdd(evt);
         setCounts({});
-        setAt(nowLocalIsoMinutes());
         setOpen(false);
     }
 
@@ -85,15 +86,11 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
                         })}
                     </div>
 
-                    <div className="space-y-1.5">
-                        <Label>Time</Label>
-                        <Input type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-                    </div>
-
                     <Separator />
                     <div className="text-sm text-muted-foreground">
-                        Total items: <span className="font-medium">{total}</span> •
-                        Estimated carbs: <span className="font-medium">{Math.round(totalCarbs * 10) / 10} g</span>
+                        Total: <span className="font-medium">{total}</span> •
+                        Carbs: <span className="font-medium">{Math.round(totalCarbs*10)/10} g</span> •
+                        Fats: <span className="font-medium">{Math.round(totalFats*10)/10} g</span>
                     </div>
                 </div>
 
