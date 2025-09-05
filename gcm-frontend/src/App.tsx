@@ -148,7 +148,7 @@ function Dashboard() {
                 <div className="space-y-6">
                     <ActionPanel onAdd={addEvent} onCreateFood={createFood} />
                     <Separator />
-                    <GlucoseChart data={samples} trend={trend} simNow={simNow} />
+                    <GlucoseChart data={samples} trend={trend} simNow={simNow} events={events} />
                     <Separator />
                     <SuggestionBox current={suggestion} />
                 </div>

@@ -19,13 +19,14 @@ import {
     ChartContainer,
     ChartTooltip,
 } from "@/components/ui/chart"
-import type { GlucoseSample } from "@/types"
+import type { GlucoseSample, TimelineEvent  } from "@/types"
 import {Separator} from "@/components/ui/separator.tsx";
 
 type Props = {
     data: GlucoseSample[]
     trend: "↑" | "↓" | "→" // backend-provided
     simNow: number // for demo purposes only
+    events?: TimelineEvent[] // for insulin markers (not implemented here)
 }
 
 const chartConfig = {
@@ -35,7 +36,7 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
-export function GlucoseChart({ data, trend, simNow }: Props) {
+export function GlucoseChart({ data, trend, simNow, events }: Props) {
     const [activeChart] =
         React.useState<keyof typeof chartConfig>("glucose")
 
@@ -47,6 +48,14 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
 
     // current value = last glucose
     const current = data.at(-1)?.mmol ?? null
+
+    const insulin = React.useMemo(
+      () =>
+        (events ?? [])
+          .filter(e => e.type === "INSULIN" && (e.amount ?? 0) > 0)
+          .map(e => ({ id: e.id, at: e.at, units: Number(e.amount) })),
+      [events]
+    )
 
     return (
         <Card className="py-4 sm:py-0">
@@ -147,6 +156,23 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
                                 );
                             }}
                         />
+
+                        {insulin.map(i => (
+                            <ReferenceLine
+                                key={i.id}
+                                x={i.at}
+                                stroke="#8B5CF6"              // violet
+                                strokeDasharray="4 4"
+                                ifOverflow="extendDomain"
+                                label={{
+                                    value: `${i.units}U`,
+                                    position: "top",
+                                    fill: "#8B5CF6",
+                                    fontSize: 11,
+                                }}
+                            />
+                        ))}
+
                         <Line
                             dataKey={activeChart}
                             type="monotone"
