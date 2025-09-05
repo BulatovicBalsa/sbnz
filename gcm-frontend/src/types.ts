@@ -27,3 +27,18 @@ export interface User {
     surname: string;
     token: string;
 }
+
+export interface FoodItem {
+    id: string;
+    name: string;
+    carbs: number;          // grams per portion
+    fats: number;           // grams per portion
+    glycemicIndex: number;  // 0-100
+}
+
+export const FOOD_CATALOG: FoodItem[] = [
+    { id: "banana",  name: "Banana",  carbs: 27, fats: 0.3, glycemicIndex: 51 },
+    { id: "apple",   name: "Apple",   carbs: 25, fats: 0.2, glycemicIndex: 36 },
+    { id: "oatmeal", name: "Oatmeal", carbs: 27, fats: 3.0, glycemicIndex: 55 },
+    { id: "yogurt",  name: "Yogurt",  carbs: 17, fats: 3.5, glycemicIndex: 35 },
+];
