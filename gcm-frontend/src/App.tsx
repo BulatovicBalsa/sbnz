@@ -116,7 +116,6 @@ function Dashboard() {
         setSamples(history);
         setSimNow(baseNow);
 
-        console.log("CAo")
         const intervalId = setInterval(() => {
             setSimNow(prevSimNow => {
                 const nextTime = prevSimNow + SIM_INTERVAL;

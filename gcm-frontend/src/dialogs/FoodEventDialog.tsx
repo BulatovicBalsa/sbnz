@@ -48,7 +48,7 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
             label: `${parts.join(", ")} • ${Math.round(totalCarbs*10)/10}g carbs • ${Math.round(totalFats*10)/10}g fats`,
             // Keep carbs in amount for quick math; adjust if you prefer null
             amount: Math.round(totalCarbs * 10) / 10,
-            at: Date.now(), // occurs when user inserts it
+            at: Date.now(),
         };
         onAdd(evt);
         setCounts({});
