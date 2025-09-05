@@ -5,7 +5,7 @@ import {
     Line,
     LineChart,
     XAxis,
-    ReferenceLine, YAxis,
+    ReferenceLine, YAxis, Customized,
 } from "recharts"
 import {
     Card,
@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/chart"
 import type { GlucoseSample, TimelineEvent  } from "@/types"
 import {Separator} from "@/components/ui/separator.tsx";
+import FoodHover from "@/components/chart/hover/FoodHover.tsx";
+import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
 
 type Props = {
     data: GlucoseSample[]
@@ -35,9 +37,6 @@ const chartConfig = {
         color: "var(--chart-1)",
     },
 } satisfies ChartConfig
-
-const formatClock = (t: number) =>
-    new Date(t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
 export function GlucoseChart({ data, trend, simNow, events }: Props) {
     const [activeChart] =
@@ -60,19 +59,25 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
       [events]
     )
 
-    // hovered timestamp (x)
-    const [hoverTs, setHoverTs] = React.useState<number | null>(null);
+    // Parse "... 34g carbs • 12.5g fats" from FoodEvent label (fallback if amount isn't set)
+    const parseFoodMacrosFromLabel = (label?: string) => {
+        if (!label) return { carbs: undefined as number | undefined, fats: undefined as number | undefined };
+        const carbs = label.match(/([\d.]+)\s*g\s*carbs/i)?.[1];
+        const fats  = label.match(/([\d.]+)\s*g\s*fats?/i)?.[1];
+        return { carbs: carbs ? Number(carbs) : undefined, fats: fats ? Number(fats) : undefined };
+    };
 
-    // insulin near hovered x (±5 minutes)
-    const NEAR_MS = 5 * 60 * 1000;
-    const nearInsulin = React.useMemo(
+    const food = React.useMemo(
         () =>
-            hoverTs == null
-                ? []
-                : insulin
-                    .filter(i => Math.abs(i.at - hoverTs) <= NEAR_MS)
-                    .sort((a, b) => a.at - b.at),
-        [NEAR_MS, hoverTs, insulin]
+            (events ?? [])
+                .filter(e => e.type === "FOOD")
+                .map(e => {
+                    const parsed = parseFoodMacrosFromLabel(e.label as string);
+                    // if your FoodEventDialog stored total carbs in e.amount, prefer that:
+                    const carbs = Number.isFinite(Number(e.amount)) ? Number(e.amount) : parsed.carbs;
+                    return { id: e.id, at: e.at, label: e.label as string, carbs, fats: parsed.fats };
+                }),
+        [events]
     );
 
     return (
@@ -111,13 +116,6 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         accessibilityLayer
                         data={chartData}
                         margin={{ left: 12, right: 12 }}
-                        onMouseMove={(state) => {
-                            // activeLabel is the numeric X (timestamp) when XAxis type="number"
-                            if (state && typeof state.activeLabel === "number") {
-                                setHoverTs(state.activeLabel);
-                            }
-                        }}
-                        onMouseLeave={() => setHoverTs(null)}
                     >
                     <CartesianGrid vertical={false} />
                         <XAxis
@@ -182,16 +180,84 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                             }}
                         />
 
-                        {insulin.map(i => (
-                            <ReferenceLine
-                                key={i.id}
-                                x={i.at}
-                                stroke="#8B5CF6"
-                                strokeDasharray="4 4"
-                                ifOverflow="extendDomain"
-                                label={{ value: `${i.units}U`, position: "top", fill: "#8B5CF6", fontSize: 11 }}
-                            />
-                        ))}
+                        <Customized
+                            component={(props: any) => {
+                                if (!food.length && !insulin.length) return null;
+                                const { xAxisMap, offset } = props;
+                                const xKey = Object.keys(xAxisMap)[0];
+                                const xScale = xAxisMap[xKey]?.scale;
+                                if (!xScale) return null;
+
+                                const baseY = offset.top + offset.height; // X-axis baseline
+
+                                return (
+                                    <g>
+                                        {/* Food icons */}
+                                        {food.map(f => {
+                                            const x = xScale(f.at);
+                                            if (x == null || Number.isNaN(x)) return null;
+                                            return (
+                                                <foreignObject
+                                                    key={`food-${f.id}`}
+                                                    x={x - 8}
+                                                    y={baseY + 2}
+                                                    width={16}
+                                                    height={16}
+                                                    style={{ overflow: "visible", pointerEvents: "auto" }}
+                                                >
+                                                    <FoodHover at={f.at} carbs={f.carbs} fats={f.fats} />
+                                                </foreignObject>
+                                            );
+                                        })}
+
+                                        {/* Insulin icons */}
+                                        {insulin.map(i => {
+                                            const x = xScale(i.at);
+                                            if (x == null || Number.isNaN(x)) return null;
+                                            return (
+                                                <foreignObject
+                                                    key={`ins-${i.id}`}
+                                                    x={x - 8}
+                                                    y={baseY + 24}
+                                                    width={16}
+                                                    height={16}
+                                                    style={{ overflow: "visible", pointerEvents: "auto" }}
+                                                >
+                                                    <InsulinHover at={i.at} units={i.units} />
+                                                </foreignObject>
+                                            );
+                                        })}
+                                    </g>
+                                );
+                            }}
+                        />
+
+                        {insulin.map(i => {
+                            if (i.at < simNow - 60 * 60 * 1000 || i.at > simNow + 60 * 60 * 1000) return null;
+                            return (
+                                <ReferenceLine
+                                    key={i.id}
+                                    x={i.at}
+                                    stroke="#8B5CF6"
+                                    strokeDasharray="4 4"
+                                    ifOverflow="extendDomain"
+                                    label={{ value: `${i.units}U`, position: "top", fill: "#8B5CF6", fontSize: 11 }}
+                                />
+                            )}
+                        )}
+
+                        {food.map(f => {
+                            if (f.at < simNow - 60 * 60 * 1000 || f.at > simNow + 60 * 60 * 1000) return null;
+                            return (
+                                <ReferenceLine
+                                    key={f.id}
+                                    x={f.at}
+                                    stroke="orange"
+                                    strokeDasharray="4 4"
+                                    ifOverflow="extendDomain"
+                                />
+                            )})
+                        }
 
                         <Line
                             dataKey={activeChart}
@@ -214,30 +280,6 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                         />
                     </LineChart>
                 </ChartContainer>
-
-                {/* Bottom insulin info bar */}
-                <div className="mt-2 text-xs text-muted-foreground">
-                    {hoverTs == null ? (
-                        <span>Hover the chart to see insulin near a time.</span>
-                    ) : nearInsulin.length === 0 ? (
-                        <span>{formatClock(hoverTs)} — no insulin in ±5 min.</span>
-                    ) : (
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="opacity-80">{formatClock(hoverTs)}</span>
-                            {nearInsulin.map(i => (
-                                <span
-                                    key={i.id}
-                                    className="rounded-full border px-2 py-0.5"
-                                    title={`at ${formatClock(i.at)}`}
-                                    style={{ borderColor: "#8B5CF6", color: "#8B5CF6" }}
-                                >
-                                  {i.units}U @ {formatClock(i.at)}
-                                </span>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
             </CardContent>
         </Card>
     )
