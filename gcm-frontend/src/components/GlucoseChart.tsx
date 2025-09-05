@@ -115,7 +115,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                     <LineChart
                         accessibilityLayer
                         data={chartData}
-                        margin={{ left: 12, right: 12 }}
+                        margin={{ left: 12, right: 12, bottom: 42 }}
                     >
                     <CartesianGrid vertical={false} />
                         <XAxis
@@ -196,6 +196,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                                         {food.map(f => {
                                             const x = xScale(f.at);
                                             if (x == null || Number.isNaN(x)) return null;
+                                            if (f.at < simNow - 60 * 60 * 1000 || f.at > simNow + 60 * 60 * 1000) return null;
                                             return (
                                                 <foreignObject
                                                     key={`food-${f.id}`}
@@ -214,6 +215,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
                                         {insulin.map(i => {
                                             const x = xScale(i.at);
                                             if (x == null || Number.isNaN(x)) return null;
+                                            if (i.at < simNow - 60 * 60 * 1000 || i.at > simNow + 60 * 60 * 1000) return null;
                                             return (
                                                 <foreignObject
                                                     key={`ins-${i.id}`}
