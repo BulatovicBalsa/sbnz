@@ -5,7 +5,7 @@ import {
     Line,
     LineChart,
     XAxis,
-    ReferenceLine,
+    ReferenceLine, YAxis,
 } from "recharts"
 import {
     Card,
@@ -105,6 +105,7 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
                                 });
                             }}
                         />
+                        <YAxis domain={[1.9, 23.0]} ticks={[3, 6, 9, 12, 15, 18, 21]} />
                         <ChartTooltip
                             content={({ active, payload, label }) => {
                                 if (!active || !payload?.length) return null;
@@ -159,13 +160,11 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
                             y={3.9}
                             stroke="red"
                             strokeDasharray="4 4"
-                            label="3.9"
                         />
                         <ReferenceLine
                             y={9.9}
                             stroke="gold"
                             strokeDasharray="4 4"
-                            label="9.9"
                         />
                     </LineChart>
                 </ChartContainer>
