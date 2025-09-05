@@ -18,9 +18,9 @@ import {
     type ChartConfig,
     ChartContainer,
     ChartTooltip,
-    ChartTooltipContent,
 } from "@/components/ui/chart"
 import type { GlucoseSample } from "@/types"
+import {Separator} from "@/components/ui/separator.tsx";
 
 type Props = {
     data: GlucoseSample[]
@@ -30,24 +30,19 @@ type Props = {
 
 const chartConfig = {
     glucose: {
-        label: "Current Glucose",
+        label: "Glucose (mmol/L)",
         color: "var(--chart-1)",
-    },
-    trend: {
-        label: "Trend",
-        color: "var(--chart-2)",
     },
 } satisfies ChartConfig
 
 export function GlucoseChart({ data, trend, simNow }: Props) {
-    const [activeChart, setActiveChart] =
+    const [activeChart] =
         React.useState<keyof typeof chartConfig>("glucose")
 
     // just for demo — you can swap this for backend-processed arrays
     const chartData = data.map((d) => ({
         date: d.t,
         glucose: d.mmol,
-        trend: 1, // dummy series just to render a flat line
     }))
 
     // current value = last glucose
@@ -65,18 +60,16 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
                         return (
                             <button
                                 key={key}
-                                data-active={activeChart === key}
                                 className="data-[active=true]:bg-muted/50 flex flex-1 flex-col justify-center gap-1 border-t px-6 py-4 text-left even:border-l sm:border-t-0 sm:border-l sm:px-8 sm:py-6"
-                                onClick={() => setActiveChart(key)}
                             >
-                <span className="text-muted-foreground text-xs">
-                  {chartConfig[key].label}
-                </span>
+                                <span className="text-muted-foreground text-xs">
+                                  {key === "glucose" ? "Glucose (mmol/L)" : "Trend"}
+                                </span>
                                 <span className="text-lg leading-none font-bold sm:text-3xl">
-                  {key === "glucose"
-                      ? current?.toFixed(1) ?? "--"
-                      : trend}
-                </span>
+                                  {key === "glucose"
+                                      ? current?.toFixed(1) ?? "--"
+                                      : trend}
+                                </span>
                             </button>
                         )
                     })}
@@ -103,27 +96,60 @@ export function GlucoseChart({ data, trend, simNow }: Props) {
                             tickLine={false}
                             axisLine={false}
                             tickMargin={8}
-                            minTickGap={32}
-                            tickFormatter={(value) =>
-                                new Date(value).toLocaleTimeString([], {
+                            tickFormatter={(value) => {
+                                // Ensure value is a valid timestamp
+                                const date = new Date(value);
+                                return date.toLocaleTimeString([], {
                                     hour: "2-digit",
                                     minute: "2-digit",
-                                })
-                            }
+                                });
+                            }}
                         />
                         <ChartTooltip
-                            content={
-                                <ChartTooltipContent
-                                    className="w-[150px]"
-                                    labelKey="date"
-                                    labelFormatter={(value) => new Date(value).toLocaleTimeString()}
-                                />
-                            }
+                            content={({ active, payload, label }) => {
+                                if (!active || !payload?.length) return null;
+
+                                // Prefer the original numeric timestamp from the row
+                                const ts =
+                                    Number(payload[0]?.payload?.date ?? payload[0]?.payload?.t ?? label);
+
+                                const timeStr = Number.isFinite(ts)
+                                    ? new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                    : "—";
+
+                                const value = payload[0]?.value as number | string | undefined;
+
+                                return (
+                                    <Card className="pointer-events-none border shadow-md">
+                                        <CardContent className="p-3">
+                                            <div className="text-xs text-muted-foreground">Time</div>
+                                            <div className="text-sm font-medium">{timeStr}</div>
+
+                                            <Separator className="my-2" />
+
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    {/* color swatch matches the series color */}
+                                                    <span
+                                                        className="inline-block h-2 w-2 rounded-full"
+                                                        style={{ background: "var(--color-glucose)" }}
+                                                        aria-hidden
+                                                    />
+                                                    <span className="text-xs text-muted-foreground">Glucose</span>
+                                                </div>
+                                                <div className="font-mono tabular-nums text-sm">
+                                                    {value ?? "—"} <span className="text-xs">mmol/L</span>
+                                                </div>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            }}
                         />
                         <Line
                             dataKey={activeChart}
                             type="monotone"
-                            stroke={`var(--color-primary)`}
+                            stroke={`var(--color-${activeChart})`}
                             strokeWidth={2}
                             dot={false}
                             isAnimationActive={false}

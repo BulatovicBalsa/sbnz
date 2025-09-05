@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import { useAuth } from './auth';
 import type { GlucoseSample, SuggestionMessage, TimelineEvent } from './types';
 import { calcTrend } from './utils/glucose';
@@ -27,7 +27,6 @@ export default function App() {
 }
 
 function Dashboard() {
-    const HOUR = 60 * 60 * 1000;               // 1h (used by chart domain)
     const [simNow, setSimNow] = useState(() => Date.now());
     const { user, logout } = useAuth();
 
@@ -91,44 +90,46 @@ function Dashboard() {
         return () => clearInterval(id);
     }, [USE_MOCK, simNow]);
 
+    const createSample = (t: number) => {
+        const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
+
+        let mmol = 6.5;
+        mmol += (Math.random() - 0.5) * 1.3;
+        mmol = clamp(mmol, 3, 12);
+        return { t, mmol: +mmol.toFixed(1) };
+    }
 
     useEffect(() => {
         if (!USE_MOCK) return;
 
-        const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-
         // 1) seed past 1h
         const baseNow = Date.now();
-        const history: GlucoseSample[] = [];
-        let mmol = 6.5;
 
-        for (let i = 12; i > 0; i--) {            // 12 * 5min = 60min
+        const history: GlucoseSample[] = [];
+        for (let i = 12; i >= 0; i--) {
             const t = baseNow - i * SIM_INTERVAL;
-            mmol += (Math.random() - 0.5) * 1.3;     // random walk
-            mmol = clamp(mmol, 3, 12);
-            history.push({ t, mmol: +mmol.toFixed(1) });
+            const sample = createSample(t);
+            history.push(sample);
+            console.log(new Date(sample.t).toLocaleTimeString(), sample.mmol);
         }
 
         setSamples(history);
         setSimNow(baseNow);
-        // keep mmol in this closure, initialized to last seeded value
-        mmol = history.at(-1)?.mmol ?? mmol;
 
-        // 2) start accelerated ticking (30s real → +5min sim)
-        const tick = () => {
-            setSimNow(prevNow => {
-                const nextNow = prevNow + SIM_INTERVAL;
-                mmol += (Math.random() - 0.5) * 1.3;
-                mmol = clamp(mmol, 3, 12);
-                const nextSample: GlucoseSample = { t: nextNow, mmol: +mmol.toFixed(1) };
-                setSamples(prev => [...prev, nextSample]); // append first
-                return nextNow;                             // then pan domain
+        console.log("CAo")
+        const intervalId = setInterval(() => {
+            setSimNow(prevSimNow => {
+                const nextTime = prevSimNow + SIM_INTERVAL;
+                const nextSample = createSample(nextTime);
+
+                console.log(new Date(nextSample.t).toLocaleTimeString(), nextSample.mmol);
+
+                setSamples(prev => [...prev.slice(1), nextSample]);
+                return nextTime;
             });
-        };
+        }, REAL_INTERVAL);
 
-        tick();                               // immediate first point
-        const id = setInterval(tick, REAL_INTERVAL);
-        return () => clearInterval(id);
+        return () => clearInterval(intervalId);
     }, [USE_MOCK]);
 
     // Timeline events (from ActionPanel)
