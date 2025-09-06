@@ -1,0 +1,11 @@
+package com.ftn.sbnz.gcm.service.repository;
+
+import com.ftn.sbnz.gcm.model.models.Food;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.UUID;
+
+@Repository
+public interface FoodRepository extends JpaRepository<Food, UUID> {
+}
