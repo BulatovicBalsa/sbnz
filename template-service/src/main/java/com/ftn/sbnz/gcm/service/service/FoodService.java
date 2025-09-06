@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service @RequiredArgsConstructor
 public class FoodService {
@@ -15,13 +16,11 @@ public class FoodService {
     public List<Food> list() { return repo.findAll(); }
 
     public Food create(FoodDtos.FoodCreateDto dto) {
-        Food f = Food.builder()
-                .name(dto.getName())
-                .carbs(dto.getCarbs())
-                .fats(dto.getFats())
-                .glycemicIndex(dto.getGlycemicIndex())
-                .build();
-
+        Food f = dto.toFood();
         return repo.save(f);
+    }
+
+    public List<FoodDtos.FoodDto> getAllFoods() {
+        return repo.findAll().stream().map(FoodDtos.FoodDto::new).collect(Collectors.toList());
     }
 }
