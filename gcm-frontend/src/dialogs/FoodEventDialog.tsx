@@ -5,12 +5,17 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
-import {type EventType, FOOD_CATALOG, type TimelineEvent} from "@/types.ts";
+import {type EventType, FOOD_CATALOG, type FoodItem, type TimelineEvent} from "@/types.ts";
 import {getTimeNow} from "@/utils/time.ts";
+import {events} from "@/api/endpoints.ts";
+import {toast} from "sonner";
 
-interface Props { onAdd: (evt: TimelineEvent) => void; }
+interface Props {
+    foodCatalog: FoodItem[],
+    onAdd: (evt: TimelineEvent) => void;
+}
 
-const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
+const FoodEventDialog: React.FC<Props> = ({ onAdd, foodCatalog }) => {
     const [open, setOpen] = useState(false);
     const [counts, setCounts] = useState<Record<string, number>>({});
 
@@ -18,7 +23,7 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
     const { totalCarbs, totalFats } = useMemo(() => {
         return Object.entries(counts).reduce(
             (acc, [id, qty]) => {
-                const item = FOOD_CATALOG.find(f => f.id === id);
+                const item = foodCatalog.find(f => f.id === id);
                 if (item) {
                     acc.totalCarbs += item.carbs * qty;
                     acc.totalFats += item.fats * qty;
@@ -44,16 +49,19 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
             return `${item.name}×${qty}`;
         });
         const evt: TimelineEvent = {
-            id: crypto.randomUUID(),
             type: "FOOD" as EventType,
             label: `${parts.join(", ")} • ${Math.round(totalCarbs*10)/10}g carbs • ${Math.round(totalFats*10)/10}g fats`,
             // Keep carbs in amount for quick math; adjust if you prefer null
             amount: Math.round(totalCarbs * 10) / 10,
             at: getTimeNow()
         };
-        onAdd(evt);
-        setCounts({});
-        setOpen(false);
+        events.create(evt).then(r => {
+            if (r) onAdd(r);
+            setCounts({})
+            setOpen(false);
+        }).catch(e => {
+            toast.error("Failed to create food event: " + e.message);
+        })
     }
 
     return (
@@ -67,20 +75,21 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd }) => {
 
                 <div className="space-y-3">
                     <div className="grid grid-cols-1 gap-2">
-                        {FOOD_CATALOG.map((f) => {
+                        {foodCatalog.map((f) => {
+                            if (!f.id) return null;
                             const qty = counts[f.id] ?? 0;
                             return (
                                 <div key={f.id} className="flex items-center justify-between rounded-xl border p-2">
                                     <div className="flex flex-col">
                                         <span className="font-medium">{f.name}</span>
                                         <span className="text-xs text-muted-foreground">
-                      {f.carbs}g carbs • {f.fats}g fats • GI {f.glycemicIndex}
-                    </span>
+                                            {f.carbs}g carbs • {f.fats}g fats • GI {f.glycemicIndex}
+                                        </span>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Button size="sm" variant="outline" onClick={() => dec(f.id)}>-</Button>
+                                        <Button size="sm" variant="outline" onClick={() => dec(f.id!)}>-</Button>
                                         <span className="w-8 text-center tabular-nums">{qty}</span>
-                                        <Button size="sm" onClick={() => inc(f.id)}>+</Button>
+                                        <Button size="sm" onClick={() => inc(f.id!)}>+</Button>
                                     </div>
                                 </div>
                             );

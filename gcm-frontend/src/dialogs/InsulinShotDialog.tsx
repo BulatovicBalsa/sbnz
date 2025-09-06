@@ -8,6 +8,8 @@ import {
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import {getTimeNow} from "@/utils/time.ts";
+import {events} from "@/api/endpoints.ts";
+import {toast} from "sonner";
 
 interface Props { onAdd: (evt: TimelineEvent) => void; }
 
@@ -18,15 +20,18 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
     function submit() {
         if (!units) return;
         const evt: TimelineEvent = {
-            id: crypto.randomUUID(),
             type: "INSULIN" as EventType,
             label: "Insulin shot",
             amount: Number(units),
             at: getTimeNow()
         };
-        onAdd(evt);
-        setUnits("");
-        setOpen(false);
+        events.create(evt).then(r => {
+            if (r) onAdd(r);
+            setUnits("");
+            setOpen(false);
+        }).catch(e => {
+            toast.error("Failed to create food event: " + e.message);
+        })
     }
 
     return (

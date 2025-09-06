@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react';
 import { useAuth } from './auth';
-import {FOOD_CATALOG, type GlucoseSample, type SuggestionMessage, type TimelineEvent} from './types';
+import {FOOD_CATALOG, type FoodItem, type GlucoseSample, type SuggestionMessage, type TimelineEvent} from './types';
 import { calcTrend } from './utils/glucose';
 import { GlucoseChart } from './components/GlucoseChart';
 import { ActionPanel } from './components/ActionPanel';
@@ -11,6 +11,8 @@ import {ThemeProvider} from "@/components/theme-provider.tsx";
 import {Separator} from "@/components/ui/separator.tsx";
 // in Dashboard (App.tsx)
 import {getTimeNow, REAL_INTERVAL, SIM_INTERVAL} from "@/utils/time";
+import {food} from "@/api/endpoints.ts";
+import {toast} from "sonner";
 
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
@@ -35,12 +37,21 @@ function Dashboard() {
     const { wsRef: glWS, connected: glConnected } = useReconnectingWS(GL_WS);
 
 
-// Suggestions stream
+    // Suggestions stream
     const [suggestion, setSuggestion] = useState<SuggestionMessage | null>(null);
     const { wsRef: sugWS, connected: sugConnected } = useReconnectingWS(SUG_WS);
 
+    const [foodCatalog, setFoodCatalog] = useState<FoodItem[]>([]);
 
     const USE_MOCK = import.meta.env.VITE_MOCK === '1';
+
+    useEffect(() => {
+        food.get().then(f => setFoodCatalog(f)).catch(err => {
+            toast.error(err.message);
+            setFoodCatalog(FOOD_CATALOG);
+        });
+
+    }, [USE_MOCK]);
 
     // Incoming messages (real WebSocket)
     useEffect(() => {
@@ -75,20 +86,6 @@ function Dashboard() {
             }
         };
     }, [sugWS, USE_MOCK]);
-
-    useEffect(() => {
-        if (!USE_MOCK) return;
-        const id = setInterval(() => {
-            const texts = [
-                'Consider 10g fast carbs if trending ↓ and <4.5',
-                'Walk 15 min in 30 min',
-                'Bolus correction 1u suggested',
-                'Hydrate: 200ml water'
-            ];
-            setSuggestion({ at: simNow, text: texts[Math.floor(Math.random() * texts.length)] });
-        }, 30000);
-        return () => clearInterval(id);
-    }, [USE_MOCK, simNow]);
 
     const createSample = (t: number) => {
         const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
@@ -139,9 +136,6 @@ function Dashboard() {
     // Timeline events (from ActionPanel)
     const [events, setEvents] = useState<TimelineEvent[]>([]);
     function addEvent(e: TimelineEvent) { setEvents(prev => [...prev, e]); }
-    function createFood(f: { id: string; name: string; carbs: number; fats: number; glycemicIndex: number; }) {
-        FOOD_CATALOG.push(f);
-    }
 
     const trend = calcTrend(samples);
 
@@ -150,7 +144,7 @@ function Dashboard() {
             <TopBar name={`${user!.name} ${user!.surname}`} onLogout={logout} simNow={simNow} />
             <Content>
                 <div className="space-y-6">
-                    <ActionPanel onAdd={addEvent} onCreateFood={createFood} />
+                    <ActionPanel onAdd={addEvent} foodCatalog={foodCatalog} onCreateFood={(f) => setFoodCatalog(fc => [...fc, f])} />
                     <Separator />
                     <GlucoseChart data={samples} trend={trend} simNow={simNow} events={events} />
                     <Separator />

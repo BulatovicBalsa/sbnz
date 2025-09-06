@@ -8,7 +8,7 @@ export type EventType = 'FOOD' | 'INSULIN' | 'ACTIVITY';
 
 
 export interface TimelineEvent {
-    id: string;
+    id?: string;
     type: EventType;
     at: number; // unix ms, when it happened (or planned)
     label: string; // food name / activity / short text
@@ -29,7 +29,7 @@ export interface User {
 }
 
 export interface FoodItem {
-    id: string;
+    id?: string;
     name: string;
     carbs: number;          // grams per portion
     fats: number;           // grams per portion

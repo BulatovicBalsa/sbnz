@@ -9,6 +9,8 @@ import {
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import { nowLocalIsoMinutes, isFutureOrNow } from "@/utils/datetime";
+import {events} from "@/api/endpoints.ts";
+import {toast} from "sonner";
 
 type Intensity = "LOW" | "MED" | "HIGH";
 
@@ -28,15 +30,16 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
         if (!isFutureOrNow(start)) return; // hard guard: cannot insert in the past
         const duration = Number(durationMin || "0");
         const evt: TimelineEvent = {
-            id: crypto.randomUUID(),
             type: "ACTIVITY" as EventType,
             label: `${intensity} activity • ${duration} min`,
             amount: duration,
             at: new Date(start).getTime(),
         };
-        onAdd(evt);
-        setIntensity("LOW"); setStart(nowLocalIsoMinutes()); setDurationMin("30");
-        setOpen(false);
+        events.create(evt).then(r => {
+            if (r) onAdd(r);
+            setIntensity("LOW"); setStart(nowLocalIsoMinutes()); setDurationMin("30");
+            setOpen(false);
+        }).catch(e => toast.error('Failed to create activity event: ' + e.message));
     }
 
     return (

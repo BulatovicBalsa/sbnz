@@ -8,18 +8,19 @@ import InsulinShotDialog from "@/dialogs/InsulinShotDialog.tsx";
 import ActivityDialog from "@/dialogs/ActivityDialog.tsx";
 
 interface Props {
+    foodCatalog: FoodItem[]
     onAdd: (evt: TimelineEvent) => void;
     onCreateFood: (food: FoodItem) => void; // persist to DB
 }
 
-export const ActionPanel: React.FC<Props> = ({ onAdd, onCreateFood }) => {
+export const ActionPanel: React.FC<Props> = ({ onAdd, foodCatalog, onCreateFood }) => {
     return (
         <Card>
             <CardHeader><CardTitle>Actions</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                     <CreateFoodDialog onCreateFood={onCreateFood} />
-                    <FoodEventDialog onAdd={onAdd} />
+                    <FoodEventDialog onAdd={onAdd} foodCatalog={foodCatalog}/>
                     <InsulinShotDialog onAdd={onAdd} />
                     <ActivityDialog onAdd={onAdd} />
                 </div>

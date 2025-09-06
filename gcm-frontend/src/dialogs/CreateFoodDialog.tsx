@@ -7,6 +7,8 @@ import {
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
 import type {FoodItem} from "@/types.ts";
+import {food} from "@/api/endpoints.ts";
+import {toast} from "sonner";
 
 interface Props {
     onCreateFood: (food: FoodItem) => void; // send to DB layer
@@ -29,16 +31,19 @@ const CreateFoodDialog: React.FC<Props> = ({ onCreateFood }) => {
 
     function submit() {
         if (!canSubmit) return;
-        const food: FoodItem = {
-            id: crypto.randomUUID(),
+        const foodItem: FoodItem = {
             name: name.trim(),
             carbs: Number(carbs),
             fats: Number(fats),
             glycemicIndex: Number(gi),
         };
-        onCreateFood(food);
-        setName(""); setCarbs(""); setFats(""); setGi("");
-        setOpen(false);
+        food.create(foodItem).then(r => {
+            if (r) onCreateFood(r);
+            setName(""); setCarbs(""); setFats(""); setGi("");
+            setOpen(false);
+        }).catch(err => {
+            toast.error("Failed to create food: " + err.message);
+        })
     }
 
     return (
