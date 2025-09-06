@@ -11,9 +11,9 @@ export { setAuthToken }; // re-export for convenience
 
 // ------------ Food ------------
 export const food = {
-    get: () => http.get<FoodItem[]>("/api/food"),
+    get: () => http.get<FoodItem[]>("/food"),
     create: (f: Omit<FoodItem, "id">) =>
-        http.post<FoodItem>("/api/food", f),
+        http.post<FoodItem>("/food", f),
 };
 
 // ------------ Events ------------
@@ -25,7 +25,7 @@ type ListEventsQuery = {
 
 export const events = {
     list: (q?: ListEventsQuery) =>
-        http.get<TimelineEvent[]>("/api/events", {
+        http.get<TimelineEvent[]>("/events", {
             from: q?.from,
             to: q?.to,
             types: q?.types?.join(","),
@@ -55,13 +55,13 @@ export const events = {
             }
         }
 
-        return http.post<TimelineEvent>("/api/events", payload);
+        return http.post<TimelineEvent>("/events", payload);
     },
 
     // Optional: add if/when your backend supports them
     update: (id: string, patch: Partial<Omit<TimelineEvent, "id">>) =>
-        http.patch<TimelineEvent>(`/api/events/${id}`, patch),
+        http.patch<TimelineEvent>(`/events/${id}`, patch),
 
     delete: (id: string) =>
-        http.delete<{ ok: true }>(`/api/events/${id}`),
+        http.delete<{ ok: true }>(`/events/${id}`),
 };

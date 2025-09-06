@@ -39,7 +39,7 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
             if (r) onAdd(r);
             setIntensity("LOW"); setStart(nowLocalIsoMinutes()); setDurationMin("30");
             setOpen(false);
-        }).catch(e => toast.error('Failed to create activity event: ' + e.message));
+        }).catch(e => toast.error('Failed to create activity event: ' + JSON.parse(e.message).error));
     }
 
     return (

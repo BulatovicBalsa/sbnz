@@ -42,7 +42,7 @@ const CreateFoodDialog: React.FC<Props> = ({ onCreateFood }) => {
             setName(""); setCarbs(""); setFats(""); setGi("");
             setOpen(false);
         }).catch(err => {
-            toast.error("Failed to create food: " + err.message);
+            toast.error("Failed to create food: " + JSON.parse(err.message).error);
         })
     }
 

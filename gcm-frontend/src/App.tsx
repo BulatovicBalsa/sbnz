@@ -44,7 +44,7 @@ function Dashboard() {
 
     useEffect(() => {
         food.get().then(f => setFoodCatalog(f)).catch(err => {
-            toast.error(err.message);
+            toast.error("Failed to load food catalog, using built-in: " + JSON.parse(err.message).error);
             setFoodCatalog(FOOD_CATALOG);
         });
 

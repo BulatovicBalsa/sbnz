@@ -60,7 +60,7 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd, foodCatalog }) => {
             setCounts({})
             setOpen(false);
         }).catch(e => {
-            toast.error("Failed to create food event: " + e.message);
+            toast.error("Failed to create food event: " + JSON.parse(e.message).error);
         })
     }
 
