@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage';
 import {Toaster} from "@/components/ui/sonner";
 
 
+// eslint-disable-next-line react-refresh/only-export-components
 function Root() {
     const { user } = useAuth();
     return user ? <App /> : <LoginPage />;

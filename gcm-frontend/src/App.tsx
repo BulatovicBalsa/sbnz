@@ -5,7 +5,6 @@ import { calcTrend } from './utils/glucose';
 import { GlucoseChart } from './components/GlucoseChart';
 import { ActionPanel } from './components/ActionPanel';
 import { SuggestionBox } from './components/SuggestionBox';
-import { useReconnectingWS } from './hooks/useReconnectingWS';
 import {Button} from "@/components/ui/button.tsx";
 import {ThemeProvider} from "@/components/theme-provider.tsx";
 import {Separator} from "@/components/ui/separator.tsx";
@@ -13,6 +12,7 @@ import {Separator} from "@/components/ui/separator.tsx";
 import {getTimeNow, REAL_INTERVAL, SIM_INTERVAL} from "@/utils/time";
 import {food} from "@/api/endpoints.ts";
 import {toast} from "sonner";
+import {openGlucoseWS, openSuggestionsWS} from "@/api/ws.ts";
 
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
@@ -34,15 +34,12 @@ function Dashboard() {
 
     // Glucose stream
     const [samples, setSamples] = useState<GlucoseSample[]>([]);
-    const { wsRef: glWS, connected: glConnected } = useReconnectingWS(GL_WS);
-
-
-    // Suggestions stream
     const [suggestion, setSuggestion] = useState<SuggestionMessage | null>(null);
-    const { wsRef: sugWS, connected: sugConnected } = useReconnectingWS(SUG_WS);
+
+    const closeGlucoseRef = React.useRef<null | (() => void)>(null);
+    const closeSugRef = React.useRef<null | (() => void)>(null);
 
     const [foodCatalog, setFoodCatalog] = useState<FoodItem[]>([]);
-
     const USE_MOCK = import.meta.env.VITE_MOCK === '1';
 
     useEffect(() => {
@@ -53,39 +50,31 @@ function Dashboard() {
 
     }, [USE_MOCK]);
 
-    // Incoming messages (real WebSocket)
+    // Glucose WS
     useEffect(() => {
-        if (USE_MOCK) return;
-        const ws = glWS.current;
-        if (!ws) return;
-        ws.onmessage = (ev) => {
-            try {
-                const msg = JSON.parse(ev.data);
-                // Expect { t: unix_ms, mmol: number }
-                if (typeof msg?.t === 'number' && typeof msg?.mmol === 'number') {
-                    setSamples(prev => [...prev, { t: msg.t, mmol: msg.mmol }]);
-                }
-            } catch {
-                console.error('Invalid glucose message', ev.data);
+        if (USE_MOCK || !GL_WS) return;
+        closeGlucoseRef.current?.();
+        closeGlucoseRef.current = openGlucoseWS(GL_WS, (msg) => {
+            console.log(msg);
+            if (typeof msg?.t === 'number' && typeof msg?.mmol === 'number') {
+                setSamples(prev => [...prev, { t: msg.t, mmol: msg.mmol }]);
             }
-        };
-    }, [glWS, USE_MOCK]);
+        });
+        return () => closeGlucoseRef.current?.();
+    }, [USE_MOCK]);
 
+    // Suggestions WS
     useEffect(() => {
-        if (USE_MOCK) return;
-        const ws = sugWS.current; if (!ws) return;
-        ws.onmessage = (ev) => {
-            try {
-                const msg = JSON.parse(ev.data);
-                // Expect { at, text }
-                if (typeof msg?.at === 'number' && typeof msg?.text === 'string') {
-                    setSuggestion(msg as SuggestionMessage);
-                }
-            } catch {
-                console.error('Invalid suggestion message', ev.data);
+        if (USE_MOCK || !SUG_WS) return;
+        closeSugRef.current?.();
+        closeSugRef.current = openSuggestionsWS(SUG_WS, (msg) => {
+            console.log(msg);
+            if (typeof msg?.at === 'number' && typeof msg?.text === 'string') {
+                setSuggestion(msg);
             }
-        };
-    }, [sugWS, USE_MOCK]);
+        });
+        return () => closeSugRef.current?.();
+    }, [USE_MOCK]);
 
     const createSample = (t: number) => {
         const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
