@@ -10,6 +10,8 @@ export type FoodAmount = {
 
 export type EventType = 'FOOD' | 'INSULIN' | 'ACTIVITY';
 
+// All possible trends
+export type GlucoseTrend = '↑' | '↓' | '→' | '↗' | '↘' | '';
 
 export interface TimelineEvent {
     id?: string;

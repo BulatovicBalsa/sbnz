@@ -1,7 +1,13 @@
 import React, {useEffect, useState} from 'react';
 import { useAuth } from './auth';
-import {FOOD_CATALOG, type FoodItem, type GlucoseSample, type SuggestionMessage, type TimelineEvent} from './types';
-import { calcTrend } from './utils/glucose';
+import {
+    FOOD_CATALOG,
+    type FoodItem,
+    type GlucoseSample,
+    type SuggestionMessage,
+    type TimelineEvent,
+    type GlucoseTrend
+} from './types';
 import { GlucoseChart } from './components/GlucoseChart';
 import { ActionPanel } from './components/ActionPanel';
 import { SuggestionBox } from './components/SuggestionBox';
@@ -13,11 +19,12 @@ import {getTimeNow} from "@/utils/time";
 import {food} from "@/api/endpoints.ts";
 import {events as eventsApi} from "@/api/endpoints.ts";
 import {toast} from "sonner";
-import {openGlucoseWS, openSuggestionsWS} from "@/api/ws.ts";
+import {openGlucoseWS, openSuggestionsWS, openTrendWS} from "@/api/ws.ts";
 
 
 const GL_WS = import.meta.env.VITE_GL_WS as string | undefined; // e.g. ws://localhost:8000/ws/glucose
 const SUG_WS = import.meta.env.VITE_SUG_WS as string | undefined; // e.g. ws://localhost:8000/ws/suggestions
+const TREND_WS = import.meta.env.VITE_TREND_WS as string | undefined; // e.g. ws://localhost:8000/ws/trend
 
 export default function App() {
     const { user } = useAuth();
@@ -31,6 +38,8 @@ export default function App() {
 
 function Dashboard() {
     const [simNow, setSimNow] = useState(() => getTimeNow());
+    const [trend, setTrend] = useState<GlucoseTrend>('');
+
     const { user, logout } = useAuth();
 
     // Glucose stream
@@ -39,6 +48,7 @@ function Dashboard() {
 
     const closeGlucoseRef = React.useRef<null | (() => void)>(null);
     const closeSugRef = React.useRef<null | (() => void)>(null);
+    const closeTrendRef = React.useRef<null | (() => void)>(null);
 
     const [foodCatalog, setFoodCatalog] = useState<FoodItem[]>([]);
     const [events, setEvents] = useState<TimelineEvent[]>([]);
@@ -82,10 +92,23 @@ function Dashboard() {
         closeSugRef.current?.();
         closeSugRef.current = openSuggestionsWS(SUG_WS, (msg) => {
             if (typeof msg?.at === 'number' && typeof msg?.text === 'string') {
+                console.log("Received suggestion:", msg);
                 setSuggestion(msg);
             }
         });
         return () => closeSugRef.current?.();
+    }, [USE_MOCK]);
+
+    // Trends WS
+    useEffect(() => {
+        if (USE_MOCK || !TREND_WS) return;
+        closeTrendRef.current?.();
+        closeTrendRef.current = openTrendWS(TREND_WS, (msg) => {
+            if (typeof msg?.trend === 'string') {
+                console.log("Received trend:", msg);
+                setTrend(msg.trend);
+            }
+        });
     }, [USE_MOCK]);
 
     useEffect(() => {
@@ -100,8 +123,6 @@ function Dashboard() {
 
     // Timeline events (from ActionPanel)
     function addEvent(e: TimelineEvent) { setEvents(prev => [...prev, e]); }
-
-    const trend = calcTrend(samples);
 
     return (
         <Shell>

@@ -1,3 +1,5 @@
+import type {GlucoseTrend} from "@/types.ts";
+
 export type CloseFn = () => void;
 
 function resolve(urlOrBase: string, path: string) {
@@ -22,6 +24,16 @@ export function openSuggestionsWS(
     onMsg: (msg: { at: number; text: string }) => void
 ): CloseFn {
     const url = resolve(urlOrBase, "/ws/suggestions");
+    const ws = new WebSocket(url);
+    ws.onmessage = (e) => { try { onMsg(JSON.parse(e.data)); } catch {console.error(e);} };
+    return () => ws.close();
+}
+
+export function openTrendWS(
+    urlOrBase: string,
+    onMsg: (msg: { trend: GlucoseTrend }) => void
+): CloseFn {
+    const url = resolve(urlOrBase, "/ws/trends");
     const ws = new WebSocket(url);
     ws.onmessage = (e) => { try { onMsg(JSON.parse(e.data)); } catch {console.error(e);} };
     return () => ws.close();

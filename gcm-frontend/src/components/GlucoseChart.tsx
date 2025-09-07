@@ -18,7 +18,7 @@ import {
     ChartContainer,
     ChartTooltip,
 } from "@/components/ui/chart"
-import type {FoodAmount, FoodItem, GlucoseSample, TimelineEvent} from "@/types"
+import type {FoodAmount, FoodItem, GlucoseSample, TimelineEvent, GlucoseTrend} from "@/types"
 import {Separator} from "@/components/ui/separator.tsx";
 import FoodHover from "@/components/chart/hover/FoodHover.tsx";
 import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
@@ -61,7 +61,7 @@ function withBoundaryPoint(samples: Pt[], from: number, to: number): Pt[] {
 
 type Props = {
     data: GlucoseSample[]
-    trend: "↑" | "↓" | "→" // backend-provided
+    trend: GlucoseTrend
     simNow?: number // for demo purposes only
     events?: TimelineEvent[] // for insulin markers (not implemented here)
     foodCatalog: FoodItem[]
