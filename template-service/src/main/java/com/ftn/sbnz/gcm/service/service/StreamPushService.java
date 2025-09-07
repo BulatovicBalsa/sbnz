@@ -1,19 +1,14 @@
 package com.ftn.sbnz.gcm.service.service;
 
-import com.ftn.sbnz.gcm.service.ws.GlucoseHandler;
-import com.ftn.sbnz.gcm.service.ws.GlucoseMessage;
 import com.ftn.sbnz.gcm.service.ws.SuggestionsHandler;
 import lombok.*;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.util.concurrent.ThreadLocalRandom;
-
 @Service
 @RequiredArgsConstructor
 public class StreamPushService {
     private final ClockService clock;
-    private final GlucoseHandler glucoseHandler;
     private final SuggestionsHandler suggestionsHandler;
 
     private static final String[] SUG = {
