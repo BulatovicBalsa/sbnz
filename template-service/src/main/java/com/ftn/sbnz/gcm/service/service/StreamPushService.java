@@ -16,16 +16,6 @@ public class StreamPushService {
     private final GlucoseHandler glucoseHandler;
     private final SuggestionsHandler suggestionsHandler;
 
-    private double mmol = 6.5;
-
-    @Scheduled(fixedDelay = 30000) // every 5s
-    public void pushGlucose() {
-        mmol += (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.6;
-        mmol = Math.max(3.0, Math.min(12.0, mmol));
-        glucoseHandler.send(new GlucoseMessage(clock.now(), Math.round(mmol * 10.0) / 10.0));
-    }
-
-
     private static final String[] SUG = {
             "Consider 10g fast carbs if trending ↓ and <4.5",
             "Walk 15 min in 30 min",
