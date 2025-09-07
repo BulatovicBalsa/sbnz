@@ -271,6 +271,7 @@ export function GlucoseChart({ data, trend, simNow, events, foodCatalog }: Props
                                 const groupByMinute = <T extends { at: number }>(items: T[]) => {
                                     const map = new Map<number, T[]>();
                                     for (const it of items) {
+                                        if (it.at < minDomain || it.at > maxDomain) continue;
                                         const k = Math.round(it.at / BUCKET_MS);
                                         (map.get(k) ?? map.set(k, []).get(k)!).push(it);
                                     }
@@ -322,6 +323,7 @@ export function GlucoseChart({ data, trend, simNow, events, foodCatalog }: Props
 
                                         {/* Lane 2: ACTIVITY (interval bar) */}
                                         {activities.map(a => {
+                                            if (a.end < minDomain || a.start > maxDomain) return null;
                                             const x1 = clamp(xScale(a.start));
                                             const x2 = clamp(xScale(a.end));
                                             const width = Math.max(8, x2 - x1);

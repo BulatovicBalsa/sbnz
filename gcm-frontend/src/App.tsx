@@ -67,6 +67,7 @@ function Dashboard() {
         closeGlucoseRef.current?.();
         closeGlucoseRef.current = openGlucoseWS(GL_WS, (msg) => {
             if (typeof msg?.t === 'number' && typeof msg?.mmol === 'number') {
+                console.log("Received glucose:", msg);
                 setSamples(prev => {
                     return [...prev, { t: msg.t, mmol: msg.mmol }]
                 });
