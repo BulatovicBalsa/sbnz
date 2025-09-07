@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 CGM Agent
-- Fetches t0Real from server (/start) and uses SPEED to compute simulated time:
+- Fetches t0Real from server (/api/clock/start) and uses SPEED to compute simulated time:
     simulated_time = t0Real + (now_local - t0_local) * SPEED
-- Generates glucose values at STEP_SECONDS and POSTs to server as:
+- Generates glucose values at LIVE_INTERVAL_SECONDS and POSTs to server as:
     { "t": <epoch_ms>, "mmol": <float> }   # matches GlucoseMessage(t, mmol)
 - Appends every sample to JSONL (JSONL_PATH)
 - Exposes:
-    GET /health  -> basic status
-    GET /history?minutes=180&step=300&base=6.5&seed=42 -> sinus-like historical series ending at current simulated time
+    GET /health
+    GET /history?minutes=180&step=300&base=6.5&seed=42
 """
 
 import os
@@ -28,23 +28,27 @@ from flask import Flask, request, jsonify
 # =========================
 # Config (env overrides)
 # =========================
-SERVER_URL       = os.getenv("SERVER_URL", "http://localhost:8000")
-PUSH_ENDPOINT    = os.getenv("PUSH_ENDPOINT", "/api/glucose")  # server ingestion endpoint (POST)
-START_ENDPOINT   = os.getenv("START_ENDPOINT", "/api/clock/start")       # server time bootstrap (GET -> {"t0Real": ...})
+SERVER_URL          = os.getenv("SERVER_URL", "http://localhost:8000")
+PUSH_ENDPOINT       = os.getenv("PUSH_ENDPOINT", "/api/glucose")      # POST ingest endpoint
+START_ENDPOINT      = os.getenv("START_ENDPOINT", "/api/clock/start") # GET -> {"t0Real": ...}
 
-AGENT_PORT       = int(os.getenv("AGENT_PORT", "9001"))        # Flask port for /history
-STEP_SECONDS     = int(os.getenv("STEP_SECONDS", "300"))       # 5min default
-BASE_MMOL        = float(os.getenv("BASE_MMOL", "6.5"))
-JSONL_PATH       = os.getenv("JSONL_PATH", "data/glucose.jsonl")
-SEED             = int(os.getenv("SEED", "42"))
-SPEED            = float(os.getenv("SPEED", "10.0"))            # time acceleration factor
+AGENT_PORT          = int(os.getenv("AGENT_PORT", "9001"))            # Flask port
+# Live push interval (REAL TIME): send one sample every 30s
+LIVE_INTERVAL_SECONDS = int(os.getenv("LIVE_INTERVAL_SECONDS", "30"))
+# History step default (SIMULATED time): 5 minutes
+HISTORY_DEFAULT_STEP  = int(os.getenv("HISTORY_DEFAULT_STEP", "300"))
+
+BASE_MMOL           = float(os.getenv("BASE_MMOL", "6.5"))
+JSONL_PATH          = os.getenv("JSONL_PATH", "data/glucose.jsonl")
+SEED                = int(os.getenv("SEED", "42"))
+# SPEED so that 30s real == 5 min simulated -> SPEED = 300 / 30 = 10
+SPEED               = float(os.getenv("SPEED", "10.0"))
 
 # =========================
 # State
 # =========================
 stop_event = threading.Event()
 t0_real_server: int | None = None   # server's t0Real (epoch ms)
-t0_local_ms: int | None = None      # local wall-clock when we fetched t0Real
 
 # =========================
 # Utilities
@@ -66,15 +70,14 @@ def append_jsonl(path: str, row: Dict):
 # Time model
 # =========================
 def sync_start_time() -> bool:
-    """Fetch t0Real from the server (/start)."""
-    global t0_real_server, t0_local_ms
+    """Fetch t0Real from the server."""
+    global t0_real_server
     try:
         r = requests.get(f"{SERVER_URL}{START_ENDPOINT}", timeout=5)
         r.raise_for_status()
         payload = r.json()
         t0_real = int(payload.get("t0Real"))
         t0_real_server = t0_real
-        t0_local_ms = now_ms_local()
         print(f"[start-sync] t0Real={t0_real_server}, SPEED={SPEED}")
         return True
     except Exception as e:
@@ -82,7 +85,6 @@ def sync_start_time() -> bool:
         return False
 
 def time_sync_daemon():
-    # initial sync retry loop
     while not stop_event.is_set():
         if sync_start_time():
             break
@@ -90,14 +92,12 @@ def time_sync_daemon():
 
 def now_ms_simulated() -> int:
     """Compute simulated time = t0Real + (now_local - t0_local) * SPEED."""
-    if t0_real_server is None or t0_local_ms is None:
-        # fallback to local wall clock until sync succeeds
+    if t0_real_server is None:
         return now_ms_local()
-    elapsed = now_ms_local() - t0_local_ms
-    return int(t0_real_server + elapsed * SPEED)
+    return int(t0_real_server + (now_ms_local() - t0_real_server) * SPEED)
 
 # =========================
-# History generation (sinus-like)
+# Generators
 # =========================
 @dataclass
 class HistoryParams:
@@ -107,12 +107,15 @@ class HistoryParams:
     seed: int
     noise_sigma: float = 0.2
     drift_amp: float = 0.6
-    # drift over ~24h in "steps": steps_per_day = (24*60) / step_minutes
-    def drift_period_steps(self) -> float:
-        return (24 * 60) / (self.step / 60)
+
+def circadian_drift(sim_ms: int, amp: float) -> float:
+    """Sinusoid based on SIMULATED time-of-day (~24h period)."""
+    day_ms = 24 * 60 * 60 * 1000
+    phase = (sim_ms % day_ms) / day_ms  # [0,1)
+    return amp * math.sin(2 * math.pi * phase)
 
 def gen_history_sinus(end_ts_ms: int, params: HistoryParams) -> List[Dict]:
-    """Generate a smooth sinusoidal glucose series ending at end_ts_ms (simulated)."""
+    """Generate smooth sinusoidal glucose series ending at end_ts_ms (simulated)."""
     rng = random.Random(params.seed)
     total_steps = max(1, int((params.minutes * 60) // params.step))
     start_ts_ms = end_ts_ms - params.minutes * 60 * 1000
@@ -120,28 +123,24 @@ def gen_history_sinus(end_ts_ms: int, params: HistoryParams) -> List[Dict]:
     values: List[Dict] = []
     for i in range(total_steps):
         t_ms = start_ts_ms + i * params.step * 1000
-        drift = params.drift_amp * math.sin(2 * math.pi * (i / params.drift_period_steps()))
+        drift = circadian_drift(t_ms, params.drift_amp)
         mmol = max(3.0, min(15.0, params.base + drift + rng.gauss(0, params.noise_sigma)))
         values.append({"t": int(t_ms), "mmol": round(mmol, 1)})
     return values
 
-# =========================
-# Live generation & push
-# =========================
-def gen_live_values(step_seconds: int, base: float, seed: int) -> Iterable[Dict]:
-    """Infinite generator producing a gently drifting series around `base`."""
+def gen_live_values(base: float, seed: int) -> Iterable[Dict]:
+    """Infinite generator producing values around `base` every LIVE_INTERVAL_SECONDS (real)."""
     rng = random.Random(seed + 1337)
-    drift_amp = 0.5
-    k = 0
     while True:
-        # ~24h sinus in "seconds"
-        period_steps = (24 * 60) / (step_seconds / 60)  # steps per day
-        drift = drift_amp * math.sin(2 * math.pi * (k / period_steps))
+        t_ms = now_ms_simulated()
+        drift = circadian_drift(t_ms, amp=0.5)
         mmol = max(3.0, min(15.0, base + drift + rng.gauss(0, 0.25)))
-        yield {"t": now_ms_simulated(), "mmol": round(mmol, 1)}
-        k += 1
-        time.sleep(step_seconds)
+        yield {"t": t_ms, "mmol": round(mmol, 1)}
+        time.sleep(LIVE_INTERVAL_SECONDS)
 
+# =========================
+# Push loop
+# =========================
 def push_to_server(sample: Dict) -> bool:
     """POST {t, mmol} to the server (matches GlucoseMessage)."""
     try:
@@ -153,11 +152,11 @@ def push_to_server(sample: Dict) -> bool:
         return False
 
 def live_push_daemon():
-    # wait until we have t0Real synced
-    while (t0_real_server is None or t0_local_ms is None) and not stop_event.is_set():
+    # wait for start sync
+    while (t0_real_server is None) and not stop_event.is_set():
         time.sleep(0.2)
-    print("[live] starting push loop")
-    for sample in gen_live_values(STEP_SECONDS, BASE_MMOL, SEED):
+    print(f"[live] starting push loop (every {LIVE_INTERVAL_SECONDS}s real ≈ {int(LIVE_INTERVAL_SECONDS*SPEED)}s simulated)")
+    for sample in gen_live_values(BASE_MMOL, SEED):
         if stop_event.is_set():
             break
         append_jsonl(JSONL_PATH, sample)
@@ -179,7 +178,8 @@ def health():
         "speed": SPEED,
         "t0Real": t0_real_server,
         "now_sim_ms": now_ms_simulated(),
-        "jsonl_path": JSONL_PATH
+        "jsonl_path": JSONL_PATH,
+        "live_interval_seconds": LIVE_INTERVAL_SECONDS
     })
 
 @app.get("/history")
@@ -187,10 +187,11 @@ def history():
     """
     GET /history?minutes=180&step=300&base=6.5&seed=42
     Returns simulated history ending at current simulated time.
+    step is in SECONDS of SIMULATED time.
     """
     try:
         minutes = int(request.args.get("minutes", "180"))
-        step    = int(request.args.get("step", str(STEP_SECONDS)))
+        step    = int(request.args.get("step", str(HISTORY_DEFAULT_STEP)))  # default 300s (5 min) SIMULATED
         base    = float(request.args.get("base", str(BASE_MMOL)))
         seed    = int(request.args.get("seed", str(SEED)))
         params = HistoryParams(minutes=minutes, step=step, base=base, seed=seed)
