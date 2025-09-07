@@ -14,7 +14,7 @@ import java.util.UUID;
 
 @Repository
 public interface TimelineEventRepository extends JpaRepository<TimelineEvent, UUID> {
-    @Query("SELECT fe FROM FoodEvent fe LEFT JOIN FETCH fe.amount p WHERE fe.at BETWEEN :from AND :to")
+    @Query("SELECT fe FROM FoodEvent fe WHERE fe.at BETWEEN :from AND :to")
     List<FoodEvent> findFoodEventsInRange(@Param("from") Long from, @Param("to") Long to);
 
     @Query("SELECT ie FROM InsulinEvent ie WHERE ie.at BETWEEN :from AND :to")

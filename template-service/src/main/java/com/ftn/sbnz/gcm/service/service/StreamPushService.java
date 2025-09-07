@@ -1,6 +1,7 @@
 package com.ftn.sbnz.gcm.service.service;
 
 import com.ftn.sbnz.gcm.service.ws.GlucoseHandler;
+import com.ftn.sbnz.gcm.service.ws.GlucoseMessage;
 import com.ftn.sbnz.gcm.service.ws.SuggestionsHandler;
 import lombok.*;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -17,19 +18,13 @@ public class StreamPushService {
 
     private double mmol = 6.5;
 
-    @Scheduled(fixedDelay = 5000) // every 5s
+    @Scheduled(fixedDelay = 30000) // every 5s
     public void pushGlucose() {
         mmol += (ThreadLocalRandom.current().nextDouble() - 0.5) * 0.6;
         mmol = Math.max(3.0, Math.min(12.0, mmol));
-        glucoseHandler.send(new GlucoseMsg(clock.now(), Math.round(mmol * 10.0) / 10.0));
+        glucoseHandler.send(new GlucoseMessage(clock.now(), Math.round(mmol * 10.0) / 10.0));
     }
 
-    @Data
-    @AllArgsConstructor
-    static class GlucoseMsg {
-        private long t;
-        private double mmol;
-    }
 
     private static final String[] SUG = {
             "Consider 10g fast carbs if trending ↓ and <4.5",
@@ -40,7 +35,7 @@ public class StreamPushService {
 
     private int i = 0;
 
-    @Scheduled(fixedDelay = 30000) // every 30s
+    @Scheduled(fixedDelay = 10000) // every 30s
     public void pushSuggestions() {
         String text = SUG[i % SUG.length]; i++;
         suggestionsHandler.send(new SuggestionMsg(clock.now(), text));
