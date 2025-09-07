@@ -43,8 +43,18 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
         }).catch(e => toast.error('Failed to create activity event: ' + JSON.parse(e.message).error));
     }
 
+    const openChanged = (isOpen: boolean) => {
+        setOpen(isOpen);
+        if (isOpen) {
+            // reset to defaults on open
+            setIntensity("LOW");
+            setStart(nowLocalIsoMinutes(10 * 60 * 1000));
+            setDurationMin("30");
+        }
+    }
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={openChanged}>
             <DialogTrigger asChild><Button className="w-full">Activity</Button></DialogTrigger>
             <DialogContent>
                 <DialogHeader>

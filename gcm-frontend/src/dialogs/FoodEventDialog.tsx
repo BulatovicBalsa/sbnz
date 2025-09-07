@@ -58,8 +58,13 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd, foodCatalog }) => {
         })
     }
 
+    const openChanged = (isOpen: boolean) => {
+        setOpen(isOpen);
+        if (isOpen) setCounts({}); // reset on open
+    }
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={openChanged}>
             <DialogTrigger asChild><Button className="w-full">Food Event</Button></DialogTrigger>
             <DialogContent>
                 <DialogHeader>

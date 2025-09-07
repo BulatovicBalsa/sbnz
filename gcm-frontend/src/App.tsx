@@ -68,8 +68,7 @@ function Dashboard() {
         closeGlucoseRef.current = openGlucoseWS(GL_WS, (msg) => {
             if (typeof msg?.t === 'number' && typeof msg?.mmol === 'number') {
                 setSamples(prev => {
-                    const start = samples.length > 12 ? 1 : 0;
-                    return [...prev.slice(start), { t: msg.t, mmol: msg.mmol }]
+                    return [...prev, { t: msg.t, mmol: msg.mmol }]
                 });
             }
         });

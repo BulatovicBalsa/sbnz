@@ -33,8 +33,13 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
         })
     }
 
+    const openChanged = (isOpen: boolean) => {
+        setOpen(isOpen);
+        if (isOpen) setUnits("");
+    }
+
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={openChanged}>
             <DialogTrigger asChild><Button className="w-full">Insulin Shot</Button></DialogTrigger>
             <DialogContent>
                 <DialogHeader>

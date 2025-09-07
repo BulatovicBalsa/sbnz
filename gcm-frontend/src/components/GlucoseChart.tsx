@@ -1,4 +1,3 @@
-// src/components/GlucoseChart.tsx
 import * as React from "react"
 import {
     CartesianGrid,
@@ -25,6 +24,40 @@ import FoodHover from "@/components/chart/hover/FoodHover.tsx";
 import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
 import ActivityHover from "@/components/chart/hover/ActivityHover.tsx";
 import {getTimeNow} from "@/utils/time.ts";
+
+type Pt = { t: number; mmol: number };
+
+function withBoundaryPoint(samples: Pt[], from: number, to: number): Pt[] {
+    if (!samples.length) return [];
+
+    // Keep in-window points
+    const inside = samples.filter(s => s.t >= from && s.t <= to);
+
+    // Find last sample before 'from'
+    let iBefore = -1;
+    for (let i = samples.length - 1; i >= 0; i--) {
+        if (samples[i].t < from) { iBefore = i; break; }
+    }
+
+    if (iBefore >= 0) {
+        const leadIn = samples[iBefore];
+        const next = samples[iBefore + 1];
+
+        // If there is a next point after 'from', add a synthetic boundary point at 'from'
+        if (next && next.t > leadIn.t) {
+            const ratio = (from - leadIn.t) / (next.t - leadIn.t);
+            const y = leadIn.mmol + ratio * (next.mmol - leadIn.mmol);
+            const boundary = { t: from, mmol: +y.toFixed(1) };
+            return [boundary, ...inside];
+        }
+
+        // Fallback: include the real lead-in point (slightly off-screen)
+        return [leadIn, ...inside];
+    }
+
+    // No point before window → just return inside
+    return inside;
+}
 
 type Props = {
     data: GlucoseSample[]
@@ -60,12 +93,6 @@ const ACTIVITY_COLORS: Record<"LOW"|"MED"|"HIGH", { stroke: string; fill: string
 export function GlucoseChart({ data, trend, simNow, events, foodCatalog }: Props) {
     const [activeChart] =
         React.useState<keyof typeof chartConfig>("glucose")
-
-    // just for demo — you can swap this for backend-processed arrays
-    const chartData = data.map((d) => ({
-        date: d.t,
-        glucose: d.mmol,
-    }))
 
     // current value = last glucose
     const current = data.at(-1)?.mmol ?? null
@@ -110,6 +137,15 @@ export function GlucoseChart({ data, trend, simNow, events, foodCatalog }: Props
     const now = simNow ?? getTimeNow();
     const minDomain = now - HOUR_MS;
     const maxDomain = now + HOUR_MS;
+
+    // Add left boundary point so the line continues into the visible window
+    const windowed = withBoundaryPoint(
+        data.map(d => ({ t: d.t, mmol: d.mmol })),
+        minDomain,
+        now // we only need continuity on the left side
+    );
+
+    const chartData = windowed.map(d => ({ date: d.t, glucose: d.mmol }));
 
     return (
         <Card className="py-4 sm:py-0">

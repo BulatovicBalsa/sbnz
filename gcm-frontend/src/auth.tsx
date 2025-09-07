@@ -21,7 +21,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     async function login(email: string, password: string) {
 // Mock mode by default. Replace with your API call when backend is ready.
-        const USE_MOCK = import.meta.env.VITE_MOCK === '1';
+        const USE_MOCK = import.meta.env.VITE_MOCK === '0';
         if (USE_MOCK) {
             const fakeUser: User = { name: 'Balsa', surname: 'Bulatovic', token: 'mock-token' };
             setUser(fakeUser);
