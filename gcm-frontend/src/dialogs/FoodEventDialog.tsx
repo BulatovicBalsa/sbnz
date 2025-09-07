@@ -5,7 +5,7 @@ import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle, DialogTrigger
 } from "@/components/ui/dialog";
-import {type EventType, FOOD_CATALOG, type FoodItem, type TimelineEvent} from "@/types.ts";
+import {type EventType, type FoodItem, type TimelineEvent} from "@/types.ts";
 import {getTimeNow} from "@/utils/time.ts";
 import {events} from "@/api/endpoints.ts";
 import {toast} from "sonner";
@@ -44,15 +44,9 @@ const FoodEventDialog: React.FC<Props> = ({ onAdd, foodCatalog }) => {
 
     function submit() {
         if (total === 0) return;
-        const parts = Object.entries(counts).map(([id, qty]) => {
-            const item = FOOD_CATALOG.find(f => f.id === id)!;
-            return `${item.name}×${qty}`;
-        });
         const evt: TimelineEvent = {
             type: "FOOD" as EventType,
-            label: `${parts.join(", ")} • ${Math.round(totalCarbs*10)/10}g carbs • ${Math.round(totalFats*10)/10}g fats`,
-            // Keep carbs in amount for quick math; adjust if you prefer null
-            amount: Math.round(totalCarbs * 10) / 10,
+            amount: Object.entries(counts).map(([id, quantity]) => ({ id, quantity })),
             at: getTimeNow()
         };
         events.create(evt).then(r => {

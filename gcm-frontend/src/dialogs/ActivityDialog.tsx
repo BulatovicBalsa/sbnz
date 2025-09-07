@@ -31,9 +31,10 @@ const ActivityDialog: React.FC<Props> = ({ onAdd }) => {
         const duration = Number(durationMin || "0");
         const evt: TimelineEvent = {
             type: "ACTIVITY" as EventType,
-            label: `${intensity} activity • ${duration} min`,
             amount: duration,
             at: new Date(start).getTime(),
+            intensity: intensity,
+            duration: duration
         };
         events.create(evt).then(r => {
             if (r) onAdd(r);

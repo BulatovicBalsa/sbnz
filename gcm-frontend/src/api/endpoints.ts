@@ -1,7 +1,7 @@
 import type {
     FoodItem,
     TimelineEvent,
-    EventType,
+    EventType, TimelineEventList,
 } from "@/types";
 import { http, setAuthToken } from "./http";
 import { getTimeNow } from "@/utils/time";
@@ -25,7 +25,7 @@ type ListEventsQuery = {
 
 export const events = {
     list: (q?: ListEventsQuery) =>
-        http.get<TimelineEvent[]>("/events", {
+        http.get<TimelineEventList>("/events", {
             from: q?.from,
             to: q?.to,
             types: q?.types?.join(","),
@@ -42,7 +42,7 @@ export const events = {
         if (payload.type === "FOOD" || payload.type === "INSULIN") {
             if (payload.at == null) payload.at = getTimeNow();
         } else if (payload.type === "ACTIVITY") {
-            if (payload.amount == null || payload.amount <= 0) {
+            if (payload.amount == null || payload.amount as number <= 0) {
                 return Promise.reject(new Error("Activity requires positive 'amount' (duration in minutes)."));
             }
             if (payload.at == null) {
@@ -55,7 +55,9 @@ export const events = {
             }
         }
 
-        return http.post<TimelineEvent>("/events", payload);
+        const endpoint = payload.type.toLowerCase();
+
+        return http.post<TimelineEvent>(`/events/${endpoint}`, payload);
     },
 
     // Optional: add if/when your backend supports them

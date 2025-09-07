@@ -21,7 +21,6 @@ const InsulinShotDialog: React.FC<Props> = ({ onAdd }) => {
         if (!units) return;
         const evt: TimelineEvent = {
             type: "INSULIN" as EventType,
-            label: "Insulin shot",
             amount: Number(units),
             at: getTimeNow()
         };

@@ -19,7 +19,7 @@ import {
     ChartContainer,
     ChartTooltip,
 } from "@/components/ui/chart"
-import type { GlucoseSample, TimelineEvent  } from "@/types"
+import type {FoodAmount, FoodItem, GlucoseSample, TimelineEvent} from "@/types"
 import {Separator} from "@/components/ui/separator.tsx";
 import FoodHover from "@/components/chart/hover/FoodHover.tsx";
 import InsulinHover from "@/components/chart/hover/InsulinHover.tsx";
@@ -31,6 +31,7 @@ type Props = {
     trend: "↑" | "↓" | "→" // backend-provided
     simNow?: number // for demo purposes only
     events?: TimelineEvent[] // for insulin markers (not implemented here)
+    foodCatalog: FoodItem[]
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -42,18 +43,11 @@ const chartConfig = {
     },
 } satisfies ChartConfig
 
-const parseFoodMacrosFromLabel = (label?: string) => {
-    if (!label) return { carbs: undefined as number | undefined, fats: undefined as number | undefined };
-    const carbs = label.match(/([\d.]+)\s*g\s*carbs/i)?.[1];
-    const fats  = label.match(/([\d.]+)\s*g\s*fats?/i)?.[1];
-    return { carbs: carbs ? Number(carbs) : undefined, fats: fats ? Number(fats) : undefined };
-};
-
 const parseActivity = (e: TimelineEvent) => {
     const start = e.at;
-    const durationMin = Number(e.amount ?? 0);
+    const durationMin = Number(e.duration ?? 0);
     const end = start + durationMin * 60_000;
-    const intensity = /^(LOW|MED|HIGH)/i.exec(String(e.label ?? ""))?.[1]?.toUpperCase() as "LOW"|"MED"|"HIGH"|undefined;
+    const intensity = (e.intensity as "LOW" | "MED" | "HIGH") ?? undefined;
     return { id: e.id, start, end, durationMin, intensity: intensity ?? "LOW" as const };
 };
 
@@ -63,7 +57,7 @@ const ACTIVITY_COLORS: Record<"LOW"|"MED"|"HIGH", { stroke: string; fill: string
     HIGH:{ stroke: "#EF4444", fill: "#EF4444" }, // red-500
 };
 
-export function GlucoseChart({ data, trend, simNow, events }: Props) {
+export function GlucoseChart({ data, trend, simNow, events, foodCatalog }: Props) {
     const [activeChart] =
         React.useState<keyof typeof chartConfig>("glucose")
 
@@ -79,7 +73,7 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
     const insulin = React.useMemo(
       () =>
         (events ?? [])
-          .filter(e => e.type === "INSULIN" && (e.amount ?? 0) > 0)
+          .filter(e => e.type === "INSULIN" && (e.amount as number ?? 0) > 0)
           .map(e => ({ id: e.id, at: e.at, units: Number(e.amount) })),
       [events]
     )
@@ -89,18 +83,25 @@ export function GlucoseChart({ data, trend, simNow, events }: Props) {
             (events ?? [])
                 .filter(e => e.type === "FOOD")
                 .map(e => {
-                    const parsed = parseFoodMacrosFromLabel(e.label as string);
-                    // if your FoodEventDialog stored total carbs in e.amount, prefer that:
-                    const carbs = Number.isFinite(Number(e.amount)) ? Number(e.amount) : parsed.carbs;
-                    return { id: e.id, at: e.at, label: e.label as string, carbs, fats: parsed.fats };
+                    const foodAmounts = e.amount as FoodAmount[] | [];
+                    const carbs = foodAmounts.map(fa => {
+                        const f = foodCatalog.find(fc => fc.id === fa.id);
+                        return (f?.carbs ?? 0) * fa.quantity;
+                    }).reduce((a, b) => a + b, 0);
+                    
+                    const fats = foodAmounts.map(fa => {
+                        const f = foodCatalog.find(fc => fc.id === fa.id);
+                        return (f?.fats ?? 0) * fa.quantity;
+                    }).reduce((a, b) => a + b, 0);
+                    return { id: e.id, at: e.at, label: e.label as string, carbs, fats };
                 }),
-        [events]
+        [events, foodCatalog]
     );
 
     const activities = React.useMemo(
         () =>
             (events ?? [])
-                .filter(e => e.type === "ACTIVITY" && (e.amount ?? 0) > 0)
+                .filter(e => e.type === "ACTIVITY")
                 .map(parseActivity)
                 .filter(a => a.end > a.start),
         [events]

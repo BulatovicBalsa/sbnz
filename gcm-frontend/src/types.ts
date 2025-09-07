@@ -3,6 +3,10 @@ export type GlucoseSample = {
     mmol: number; // glucose (mmol/L)
 };
 
+export type FoodAmount = {
+    id: string;       // food id
+    quantity: number; // number of portions
+}
 
 export type EventType = 'FOOD' | 'INSULIN' | 'ACTIVITY';
 
@@ -11,8 +15,16 @@ export interface TimelineEvent {
     id?: string;
     type: EventType;
     at: number; // unix ms, when it happened (or planned)
-    label: string; // food name / activity / short text
-    amount?: number; // portions / insulin units / duration in min
+    amount?: number | FoodAmount[]; // carbs grams for FOOD, units for INSULIN, minutes for ACTIVITY
+    intensity?: 'LOW' | 'MED' | 'HIGH'; // only for ACTIVITY
+    duration?: number; // only for ACTIVITY, minutes
+    label?: string; // short description
+}
+
+export interface TimelineEventList {
+    food: TimelineEvent[];
+    insulin: TimelineEvent[];
+    activity: TimelineEvent[];
 }
 
 

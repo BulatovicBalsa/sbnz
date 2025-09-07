@@ -11,6 +11,7 @@ import {Separator} from "@/components/ui/separator.tsx";
 // in Dashboard (App.tsx)
 import {getTimeNow, REAL_INTERVAL, SIM_INTERVAL} from "@/utils/time";
 import {food} from "@/api/endpoints.ts";
+import {events as eventsApi} from "@/api/endpoints.ts";
 import {toast} from "sonner";
 import {openGlucoseWS, openSuggestionsWS} from "@/api/ws.ts";
 
@@ -40,6 +41,8 @@ function Dashboard() {
     const closeSugRef = React.useRef<null | (() => void)>(null);
 
     const [foodCatalog, setFoodCatalog] = useState<FoodItem[]>([]);
+    const [events, setEvents] = useState<TimelineEvent[]>([]);
+
     const USE_MOCK = import.meta.env.VITE_MOCK === '1';
 
     useEffect(() => {
@@ -48,6 +51,14 @@ function Dashboard() {
             setFoodCatalog(FOOD_CATALOG);
         });
 
+    }, [USE_MOCK]);
+
+    useEffect(() => {
+        eventsApi.list({from: getTimeNow() - 60 * 60 * 1000, to: getTimeNow() + 24 * 60 * 60 * 1000})
+            .then(evts => {
+                const e = [...evts.food, ...evts.insulin, ...evts.activity];
+                setEvents(e);
+            }).catch(err => toast.error("Failed to load events: " + JSON.parse(err.message).error));
     }, [USE_MOCK]);
 
     // Glucose WS
@@ -123,7 +134,6 @@ function Dashboard() {
     }, [USE_MOCK]);
 
     // Timeline events (from ActionPanel)
-    const [events, setEvents] = useState<TimelineEvent[]>([]);
     function addEvent(e: TimelineEvent) { setEvents(prev => [...prev, e]); }
 
     const trend = calcTrend(samples);
@@ -135,7 +145,7 @@ function Dashboard() {
                 <div className="space-y-6">
                     <ActionPanel onAdd={addEvent} foodCatalog={foodCatalog} onCreateFood={(f) => setFoodCatalog(fc => [...fc, f])} />
                     <Separator />
-                    <GlucoseChart data={samples} trend={trend} simNow={simNow} events={events} />
+                    <GlucoseChart data={samples} trend={trend} simNow={simNow} events={events} foodCatalog={foodCatalog} />
                     <Separator />
                     <SuggestionBox current={suggestion} />
                 </div>
