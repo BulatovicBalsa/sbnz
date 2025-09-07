@@ -9,7 +9,7 @@ import {Button} from "@/components/ui/button.tsx";
 import {ThemeProvider} from "@/components/theme-provider.tsx";
 import {Separator} from "@/components/ui/separator.tsx";
 // in Dashboard (App.tsx)
-import {getTimeNow, REAL_INTERVAL, SIM_INTERVAL} from "@/utils/time";
+import {getTimeNow} from "@/utils/time";
 import {food} from "@/api/endpoints.ts";
 import {events as eventsApi} from "@/api/endpoints.ts";
 import {toast} from "sonner";
@@ -66,9 +66,11 @@ function Dashboard() {
         if (USE_MOCK || !GL_WS) return;
         closeGlucoseRef.current?.();
         closeGlucoseRef.current = openGlucoseWS(GL_WS, (msg) => {
-            console.log(msg);
             if (typeof msg?.t === 'number' && typeof msg?.mmol === 'number') {
-                setSamples(prev => [...prev, { t: msg.t, mmol: msg.mmol }]);
+                setSamples(prev => {
+                    const start = samples.length > 12 ? 1 : 0;
+                    return [...prev.slice(start), { t: msg.t, mmol: msg.mmol }]
+                });
             }
         });
         return () => closeGlucoseRef.current?.();
@@ -79,7 +81,6 @@ function Dashboard() {
         if (USE_MOCK || !SUG_WS) return;
         closeSugRef.current?.();
         closeSugRef.current = openSuggestionsWS(SUG_WS, (msg) => {
-            console.log(msg);
             if (typeof msg?.at === 'number' && typeof msg?.text === 'string') {
                 setSuggestion(msg);
             }
@@ -87,48 +88,12 @@ function Dashboard() {
         return () => closeSugRef.current?.();
     }, [USE_MOCK]);
 
-    const createSample = (t: number) => {
-        const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
-
-        let mmol = 6.5;
-        mmol += (Math.random() - 0.5) * 1.3;
-        mmol = clamp(mmol, 3, 12);
-        return { t, mmol: +mmol.toFixed(1) };
-    }
-
     useEffect(() => {
-        if (!USE_MOCK) return;
-
-        // 1) seed past 1h
-        const baseNow = getTimeNow();
-
-        const history: GlucoseSample[] = [];
-        for (let i = 12; i >= 0; i--) {
-            const t = baseNow - i * SIM_INTERVAL;
-            const sample = createSample(t);
-            history.push(sample);
-            console.log(new Date(sample.t).toLocaleTimeString(), sample.mmol);
-        }
-
-        setSamples(history);
-        setSimNow(getTimeNow());
-
-        const intervalId = setInterval(() => {
-            const nextTime = getTimeNow();
-            const nextSample = createSample(nextTime);
-
-            console.log(new Date(nextSample.t).toLocaleTimeString(), nextSample.mmol);
-
-            setSamples(prev => [...prev.slice(1), nextSample]);
-            return nextTime;
-        }, REAL_INTERVAL);
-
         const intervalClockId = setInterval(() => {
             setSimNow(getTimeNow());
         }, 6000);
 
         return () => {
-            clearInterval(intervalId);
             clearInterval(intervalClockId);
         }
     }, [USE_MOCK]);
