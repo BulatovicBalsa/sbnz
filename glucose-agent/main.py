@@ -10,7 +10,7 @@ CGM Agent
     GET /health
     GET /history?minutes=180&step=300&base=6.5&seed=42
 """
-
+import hashlib
 import os
 import time
 import json
@@ -102,31 +102,64 @@ def now_ms_simulated() -> int:
 @dataclass
 class HistoryParams:
     minutes: int
-    step: int
+    step: int                    # seconds (simulated) between points
     base: float
     seed: int
-    noise_sigma: float = 0.2
+    noise_sigma: float = 0.35    # baseline volatility (↑ to make noisier)
     drift_amp: float = 0.6
+    mean_reversion: float = 0.25 # pull toward “normal” (0..1); higher = stronger pull
+    # shock dynamics (rare, bigger moves that decay)
+    spike_prob: float = 0.05     # chance per point to start a meal spike
+    drop_prob: float  = 0.035    # chance per point to start an insulin/activity drop
+    spike_mag_range: tuple[float,float] = (2.0, 5.0)   # mmol/L added at peak
+    drop_mag_range:  tuple[float,float] = (1.5, 4.5)   # mmol/L subtracted at peak
+    shock_half_life_steps: int = 4   # decay half-life (in points)
 
 def circadian_drift(sim_ms: int, amp: float) -> float:
-    """Sinusoid based on SIMULATED time-of-day (~24h period)."""
     day_ms = 24 * 60 * 60 * 1000
-    phase = (sim_ms % day_ms) / day_ms  # [0,1)
+    phase = (sim_ms % day_ms) / day_ms
     return amp * math.sin(2 * math.pi * phase)
 
+
 def gen_history_sinus(end_ts_ms: int, params: HistoryParams) -> List[Dict]:
-    """Generate smooth sinusoidal glucose series ending at end_ts_ms (simulated)."""
-    rng = random.Random(params.seed)
+    out: List[Dict] = []
     total_steps = max(1, int((params.minutes * 60) // params.step))
     start_ts_ms = end_ts_ms - params.minutes * 60 * 1000
 
-    values: List[Dict] = []
     for i in range(total_steps):
         t_ms = start_ts_ms + i * params.step * 1000
-        drift = circadian_drift(t_ms, params.drift_amp)
-        mmol = max(3.0, min(15.0, params.base + drift + rng.gauss(0, params.noise_sigma)))
-        values.append({"t": int(t_ms), "mmol": round(mmol, 1)})
-    return values
+        mu = params.base + circadian_drift(t_ms, params.drift_amp)
+
+        # deterministic Gaussian noise
+        noise = noise_for_time(t_ms, params.seed, params.noise_sigma)
+
+        # deterministic pseudo “shock”
+        h = int.from_bytes(hashlib.sha1(f"{params.seed}-{t_ms}".encode()).digest()[:2], "big")
+        shock = 0.0
+        if h % 100 < int(params.spike_prob*100):
+            shock = (h % 300) / 100.0 + 2.0   # 2–5 mmol spike
+        elif h % 100 < int((params.spike_prob+params.drop_prob)*100):
+            shock = -((h % 300) / 100.0 + 1.5) # 1.5–4.5 mmol drop
+
+        x = mu + noise + shock
+        x = max(2.0, min(23.0, x))
+        out.append({"t": t_ms, "mmol": round(x, 1)})
+
+    return out
+
+
+
+def noise_for_time(t_ms: int, seed: int, sigma: float) -> float:
+    # combine t and seed into bytes
+    key = f"{seed}-{t_ms}".encode("utf-8")
+    h = hashlib.sha256(key).digest()
+    # turn first 8 bytes into a float in [0,1)
+    val = int.from_bytes(h[:8], "big") / 2**64
+    # Box-Muller to make Gaussian(0,1)
+    import math
+    z = math.sqrt(-2.0 * math.log(max(val, 1e-12))) * math.cos(2*math.pi*val)
+    return z * sigma
+
 
 def gen_live_values(base: float, seed: int) -> Iterable[Dict]:
     """Infinite generator producing values around `base` every LIVE_INTERVAL_SECONDS (real)."""
