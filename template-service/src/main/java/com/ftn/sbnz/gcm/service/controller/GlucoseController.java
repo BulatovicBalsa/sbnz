@@ -1,32 +1,42 @@
 package com.ftn.sbnz.gcm.service.controller;
 
+import com.ftn.sbnz.gcm.model.models.GlucoseContext;
+import com.ftn.sbnz.gcm.service.rules.GlucoseContextBuilder;
+import com.ftn.sbnz.gcm.service.service.ClockService;
+import com.ftn.sbnz.gcm.service.service.RuleEngineSession;
 import com.ftn.sbnz.gcm.service.ws.GlucoseHandler;
 import com.ftn.sbnz.gcm.service.ws.GlucoseMessage;
-import com.ftn.sbnz.gcm.service.ws.TrendHandler;
-import com.ftn.sbnz.gcm.service.ws.TrendMessage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
-import java.util.Random;
-
 @RestController
 @RequestMapping("/api/glucose")
 @RequiredArgsConstructor
 public class GlucoseController {
+
     private final GlucoseHandler glucoseHandler;
-    private final TrendHandler trendHandler;
+    private final RuleEngineSession ruleEngine;
+    private final GlucoseContextBuilder ctxBuilder;
+    private final ClockService clockService;
 
     @PostMapping
     public void receiveGlucoseData(@RequestBody GlucoseMessage message) {
+        message.setT(clockService.now());
         glucoseHandler.send(message);
 
-        Random random = new Random();
-        List<String> trends = List.of("↑", "→", "↓", "↗", "↘");
-        TrendMessage trendMessage = new TrendMessage(trends.get(random.nextInt(trends.size())));
-        trendHandler.send(trendMessage);
+        double mmol = message.getMmol();
+        long   tMillis = message.getT();
+
+        // TODO: compute recencies from your timeline service/repo if available
+        Long minsSinceMeal    = 300L;
+        Long minsSinceInsulin = 300L;
+
+        GlucoseContext ctx = ctxBuilder.build(mmol, tMillis, minsSinceMeal, minsSinceInsulin);
+
+        // 3) fire rules — results go out via your TrendHandler & SuggestionHandler
+        ruleEngine.evaluateAndPublish(ctx);
     }
 }

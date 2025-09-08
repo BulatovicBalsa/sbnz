@@ -11,7 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
-public class SuggestionsHandler extends TextWebSocketHandler {
+public class SuggestionHandler extends TextWebSocketHandler {
     private final ObjectMapper om = new ObjectMapper();
     private final Set<WebSocketSession> sessions = ConcurrentHashMap.newKeySet();
 
