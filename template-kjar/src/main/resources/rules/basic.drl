@@ -1,0 +1,56 @@
+// src/main/resources/com/ftn/sbnz/gcm/rules/basic.drl
+package com.ftn.sbnz.gcm.rules
+
+import com.ftn.sbnz.gcm.model.models.GlucoseContext;
+import com.ftn.sbnz.gcm.model.models.Suggestion;
+import com.ftn.sbnz.gcm.model.enums.Trend;
+import com.ftn.sbnz.gcm.model.utils.TrendUtil;
+
+global org.kie.api.runtime.Channel trend; // emits Trend
+global org.kie.api.runtime.Channel sugg;  // emits Suggestion
+
+rule "Set trend from slope"
+salience 500
+when
+  $ctx : GlucoseContext( $d : delta5min )
+then
+  trend.send( TrendUtil.fromDelta($d) );
+end
+
+rule "Hypo guard"
+salience 100
+when
+  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min )
+  eval( $g < 3.9 || ($g < 5.0 && $d <= -0.15) )
+then
+  sugg.send( new Suggestion("Low glucose risk → take fast carbs (~15g), recheck in 15 min.", 1) );
+end
+
+rule "Hyper guard"
+salience 90
+when
+  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min, $minsIns : minutesSinceInsulin )
+  eval( $g > 10.0 || ($g > 9.0 && $d >= 0.15) )
+then
+  String msg = "High glucose trend → consider correction; beware stacking.";
+  if ($minsIns != null && $minsIns < 120L) msg += " Recent insulin " + $minsIns + " min.";
+  sugg.send( new Suggestion(msg, 2) );
+end
+
+rule "Post-meal fast rise"
+salience 80
+when
+  $ctx : GlucoseContext( $d : delta5min, $minsMeal : minutesSinceMeal )
+  eval( $minsMeal != null && $minsMeal <= 120L && $d >= 0.25 )
+then
+  sugg.send( new Suggestion("Rapid post-meal rise → verify bolus/ratio; consider a short walk.", 3) );
+end
+
+rule "Stable no action"
+salience -10
+when
+  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min )
+  eval( $g >= 4.0 && $g <= 10.0 && Math.abs($d) < 0.12 )
+then
+  sugg.send( new Suggestion("Stable in range; no action.", 99) );
+end
