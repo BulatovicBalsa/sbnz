@@ -1,4 +1,4 @@
-package com.ftn.sbnz.gcm.service.ws;
+package com.ftn.sbnz.gcm.model.models;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
