@@ -8,8 +8,6 @@ import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
-
 @Service
 @RequiredArgsConstructor
 public class RuleEngineSession {
@@ -20,7 +18,6 @@ public class RuleEngineSession {
     private final ClockService clockService;
     private KieSession kieSession;
 
-    @PostConstruct
     public void initSession() {
         if (kieSession != null) {
             kieSession.dispose();
@@ -40,8 +37,8 @@ public class RuleEngineSession {
         kieSession.setGlobal("trend", kieSession.getChannels().get("trend"));
         kieSession.setGlobal("sugg",  kieSession.getChannels().get("sugg"));
 
-        kieSession.setGlobal("stableBandMgPerMin", 0.3);
-        kieSession.setGlobal("fastRateMgPerMin", 0.6);
+        kieSession.setGlobal("stableRate", 0.033);
+        kieSession.setGlobal("fastRate", 0.055);
     }
 
     public void evaluateAndPublish(GlucoseMeasurement gm) {

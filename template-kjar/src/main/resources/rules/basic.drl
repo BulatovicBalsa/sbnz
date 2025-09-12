@@ -7,8 +7,8 @@ import com.ftn.sbnz.gcm.model.enums.TrendType;
 global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
 
-global Double stableBandMgPerMin;
-global Double fastRateMgPerMin;
+global Double stableRate;
+global Double fastRate;
 
 
 declare TrendSignal
@@ -16,55 +16,58 @@ declare TrendSignal
     delta : double
 end
 
-// compute once
-rule "Build TrendSignal (16m window)"
+rule "Build TrendSignal (true 16m sliding window)"
 salience 10
 when
-    Number( intValue >= 2 ) from accumulate( GlucoseMeasurement() over window:time(16m), count(1) )
-    $minTs : Number() from accumulate( GlucoseMeasurement( $t: timestamp ) over window:time(16m), min($t) )
-    $maxTs : Number() from accumulate( GlucoseMeasurement( $t: timestamp ) over window:time(16m), max($t) )
-    $first : GlucoseMeasurement( timestamp == $minTs.longValue(), $v1: value ) over window:time(16m)
-    $last  : GlucoseMeasurement( timestamp == $maxTs.longValue(),  $v2: value ) over window:time(16m)
+    $current : GlucoseMeasurement()
+
+    // Find a measurement from approximately 16 minutes ago
+    $old : GlucoseMeasurement(
+        timestamp <= ($current.timestamp - 14 * 60 * 1000), // At least 15 min ago
+        timestamp >= ($current.timestamp - 17 * 60 * 1000)  // But not more than 17 min ago
+    )
 then
-    double minutes = ($last.getTimestamp() - $first.getTimestamp()) / 60000.0;
-//    if (minutes <= 0) return;
-    double rate = ($last.getValue() - $first.getValue()) / minutes;
-    double delta = $last.getValue() - $first.getValue();
-    System.out.println("TrendSignal: rate=" + rate + " delta=" + delta + " over " + minutes + " min");
+    double minutes = ($current.getTimestamp() - $old.getTimestamp()) / 60000.0;
+    double delta = $current.getValue() - $old.getValue();
+    double rate = delta / minutes;
+
+    System.out.println("Sliding TrendSignal: rate=" + rate + " delta=" + delta + " over " + minutes + " min");
+    System.out.println("  From: " + $old.getValue() + " to " + $current.getValue());
+
     insertLogical(new TrendSignal(rate, delta));
 end
 
 // mutually exclusive classification
 rule "UP fast" activation-group "trend-classify"
 when
-    TrendSignal( rate >= fastRateMgPerMin )
-then
-    insertLogical(new Trend(TrendType.UP, 1));
-end
-
-rule "UP slow" activation-group "trend-classify"
-when
-    TrendSignal( rate >= stableBandMgPerMin, rate < fastRateMgPerMin )
+    TrendSignal( rate >= fastRate )
 then
     insertLogical(new Trend(TrendType.UP, 2));
 end
 
+rule "UP slow" activation-group "trend-classify"
+when
+    TrendSignal( rate >= stableRate, rate < fastRate )
+then
+    insertLogical(new Trend(TrendType.UP, 1));
+end
+
 rule "STABLE" activation-group "trend-classify"
-    when TrendSignal( rate > -stableBandMgPerMin, rate <  stableBandMgPerMin )
+    when TrendSignal( rate > -stableRate, rate <  stableRate )
 then
     insertLogical(new Trend(TrendType.STABLE, 1));
 end
 
 rule "DOWN slow" activation-group "trend-classify"
 when
-    TrendSignal( rate <= -stableBandMgPerMin, rate > -fastRateMgPerMin )
+    TrendSignal( rate <= -stableRate, rate > -fastRate )
 then
     insertLogical(new Trend(TrendType.DOWN, 2));
 end
 
 rule "DOWN fast" activation-group "trend-classify"
 when
-    TrendSignal( rate <= -fastRateMgPerMin )
+    TrendSignal( rate <= -fastRate )
 then
     insertLogical(new Trend(TrendType.DOWN, 1));
 end
