@@ -1,21 +1,39 @@
 package com.ftn.sbnz.gcm.service.service;
 
+import com.ftn.sbnz.gcm.model.enums.ActivityIntensity;
+import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
 import com.ftn.sbnz.gcm.model.models.*;
 import com.ftn.sbnz.gcm.service.ws.SuggestionHandler;
 import com.ftn.sbnz.gcm.service.ws.TrendHandler;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
+import org.drools.template.ObjectDataCompiler;
+import org.kie.api.KieBase;
+import org.kie.api.KieBaseConfiguration;
+import org.kie.api.KieServices;
+import org.kie.api.conf.EventProcessingOption;
+import org.kie.api.io.Resource;
+import org.kie.api.io.ResourceType;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
+import org.kie.api.runtime.KieSessionConfiguration;
+import org.kie.api.runtime.conf.ClockTypeOption;
 import org.kie.api.time.SessionPseudoClock;
+import org.kie.internal.io.ResourceFactory;
+import org.kie.internal.utils.KieHelper;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.util.List;
+import java.util.Properties;
 
 @Service
 @RequiredArgsConstructor
 public class RuleEngineSession {
 
-    private final KieContainer kieContainer;
     private final TrendHandler trendHandler;
     private final SuggestionHandler suggestionHandler;
     private final ClockService clockService;
@@ -27,7 +45,24 @@ public class RuleEngineSession {
             kieSession.dispose();
         }
 
-        kieSession = kieContainer.newKieSession("rulesSession");
+        KieHelper kieHelper = new KieHelper();
+        String drl = loadTemplate();
+        kieHelper.addContent(drl, ResourceType.DRL);
+
+        InputStream basicRules = RuleEngineSession.class.getResourceAsStream("/rules/basic.drl");
+        Resource basicResource = ResourceFactory.newInputStreamResource(basicRules);
+        kieHelper.addResource(basicResource, ResourceType.DRL);
+
+        KieBaseConfiguration kBaseConfig = KieServices.Factory.get().newKieBaseConfiguration();
+        kBaseConfig.setOption(EventProcessingOption.STREAM);
+
+        KieBase kBase = kieHelper.build(kBaseConfig);
+
+        KieSessionConfiguration kSessionCfg = KieServices.Factory.get().newKieSessionConfiguration();
+        kSessionCfg.setOption(ClockTypeOption.get("pseudo"));
+
+        kieSession = kBase.newKieSession(kSessionCfg, null);
+
         kieSession.registerChannel("trend", obj -> {
             Trend t = (Trend) obj;
             System.out.println(t);
@@ -64,5 +99,42 @@ public class RuleEngineSession {
         SessionPseudoClock clock = kieSession.getSessionClock();
         long past = clockService.now() - clock.getCurrentTime();
         clock.advanceTime(past, java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
+    private String loadTemplate() {
+        InputStream template = RuleEngineSession.class.getResourceAsStream("/rules/template.drl");
+        List<FoodRuleTemplate> data = loadData();
+
+        ObjectDataCompiler converter = new ObjectDataCompiler();
+        String drl = converter.compile(data, template);
+        return drl;
+    }
+
+    @SneakyThrows
+    private List<FoodRuleTemplate> loadData() {
+        InputStream csv = RuleEngineSession.class.getResourceAsStream("/rules/template-data.csv");
+
+        List<FoodRuleTemplate> templates = new java.util.ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(csv));
+
+        String line;
+        reader.readLine(); // Skip header
+
+        while ((line = reader.readLine()) != null) {
+            String[] parts = line.split(",");
+            // Adjust constructor arguments as needed
+            templates.add(new FoodRuleTemplate(
+                Integer.parseInt(parts[0]),
+                Double.parseDouble(parts[1]),
+                Double.parseDouble(parts[2]),
+                ActivityIntensity.valueOf(parts[3]),
+                Double.parseDouble(parts[4]),
+                Double.parseDouble(parts[5]),
+                Double.parseDouble(parts[6]),
+                GlycemicIndexType.valueOf(parts[7])
+            ));
+        }
+
+        return templates;
     }
 }

@@ -1,0 +1,2 @@
+number,glucoseMin,glucoseMax,intensity,minCarbs,maxCarbs,maxFats,glycemicIndexType
+1,4,10,NONE,15,30,2,LOW

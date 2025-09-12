@@ -2,6 +2,9 @@ package com.ftn.sbnz.gcm.model.models;
 
 import com.ftn.sbnz.gcm.model.enums.ActivityIntensity;
 import lombok.*;
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Timestamp;
+
 import javax.persistence.*;
 import java.util.UUID;
 
@@ -12,6 +15,8 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor @Builder
 @ToString
+@Role(Role.Type.EVENT)
+@Timestamp("at")
 public class ActivityEvent extends TimelineEvent {
     @Column(nullable = false)
     private Integer duration;

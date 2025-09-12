@@ -4,6 +4,7 @@ import com.ftn.sbnz.gcm.model.models.Trend;
 import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
 import com.ftn.sbnz.gcm.model.models.GlucoseTrendConfig;
 import com.ftn.sbnz.gcm.model.models.InsulinEvent;
+import com.ftn.sbnz.gcm.model.models.FoodConstraint;
 import com.ftn.sbnz.gcm.model.enums.TrendType;
 import java.util.List
 import com.ftn.sbnz.gcm.model.models.Suggestion;
@@ -161,4 +162,11 @@ when
 then
     retract($cn);
     sugg.send( new Suggestion("Glucose back to normal, no correction needed.") );
+end
+
+rule "Suggest Food"
+when
+    $foodConstraint: FoodConstraint()
+then
+    System.out.println("Food constraint generated: " + $foodConstraint);
 end

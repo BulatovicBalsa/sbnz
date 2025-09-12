@@ -1,0 +1,49 @@
+template header
+number
+glucoseMin
+glucoseMax
+intensity
+minCarbs
+maxCarbs
+maxFats
+glycemicIndexType
+
+package com.ftn.sbnz.gcm.rules
+
+import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
+import com.ftn.sbnz.gcm.model.models.FoodConstraint;
+import com.ftn.sbnz.gcm.model.models.ActivityEvent;
+import com.ftn.sbnz.gcm.model.enums.ActivityIntensity;
+import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
+
+global org.kie.api.time.SessionClock droolsClock;
+
+template "food-suggestion-rules"
+
+rule "Food Suggestion Rule @{number}"
+when
+    $latest: GlucoseMeasurement()
+    not( GlucoseMeasurement( timestamp > $latest.timestamp ) )
+    eval( $latest.getValue() >= @{glucoseMin} && $latest.getValue() <= @{glucoseMax} )
+    // Activity type condition
+    (
+        eval(ActivityIntensity.@{intensity} == ActivityIntensity.NONE) or
+        (
+            ActivityEvent(
+                intensity == ActivityIntensity.@{intensity},
+                at >= droolsClock.getCurrentTime()
+            )
+        )
+    )
+then
+    insertLogical(
+        new FoodConstraint(
+            @{minCarbs},
+            @{maxCarbs},
+            @{maxFats},
+            GlycemicIndexType.@{glycemicIndexType}
+        )
+    );
+end
+
+end template
