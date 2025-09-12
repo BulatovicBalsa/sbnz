@@ -1,6 +1,7 @@
 package com.ftn.sbnz.gcm.service.controller;
 
 import com.ftn.sbnz.gcm.model.models.GlucoseContext;
+import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
 import com.ftn.sbnz.gcm.service.rules.GlucoseContextBuilder;
 import com.ftn.sbnz.gcm.service.service.ClockService;
 import com.ftn.sbnz.gcm.service.service.RuleEngineSession;
@@ -30,13 +31,9 @@ public class GlucoseController {
         double mmol = message.getMmol();
         long   tMillis = message.getT();
 
-        // TODO: compute recencies from your timeline service/repo if available
-        Long minsSinceMeal    = 300L;
-        Long minsSinceInsulin = 300L;
+        GlucoseMeasurement gm = new GlucoseMeasurement(mmol, tMillis);
+        System.out.println(gm);
 
-        GlucoseContext ctx = ctxBuilder.build(mmol, tMillis, minsSinceMeal, minsSinceInsulin);
-
-        // 3) fire rules — results go out via your TrendHandler & SuggestionHandler
-        ruleEngine.evaluateAndPublish(ctx);
+        ruleEngine.evaluateAndPublish(gm);
     }
 }

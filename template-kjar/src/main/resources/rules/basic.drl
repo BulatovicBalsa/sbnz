@@ -1,56 +1,78 @@
-// src/main/resources/com/ftn/sbnz/gcm/rules/basic.drl
 package com.ftn.sbnz.gcm.rules
 
-import com.ftn.sbnz.gcm.model.models.GlucoseContext;
-import com.ftn.sbnz.gcm.model.models.Suggestion;
-import com.ftn.sbnz.gcm.model.enums.Trend;
-import com.ftn.sbnz.gcm.model.utils.TrendUtil;
+import com.ftn.sbnz.gcm.model.models.Trend;
+import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
+import com.ftn.sbnz.gcm.model.enums.TrendType;
 
 global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
 
-rule "Set trend from slope"
-salience 500
-when
-  $ctx : GlucoseContext( $d : delta5min )
-then
-  trend.send( TrendUtil.fromDelta($d) );
+global Double stableBandMgPerMin;
+global Double fastRateMgPerMin;
+
+
+declare TrendSignal
+    rate : double
+    delta : double
 end
 
-rule "Hypo guard"
-salience 100
+// compute once
+rule "Build TrendSignal (16m window)"
+salience 10
 when
-  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min )
-  eval( $g < 3.9 || ($g < 5.0 && $d <= -0.15) )
+    Number( intValue >= 2 ) from accumulate( GlucoseMeasurement() over window:time(16m), count(1) )
+    $minTs : Number() from accumulate( GlucoseMeasurement( $t: timestamp ) over window:time(16m), min($t) )
+    $maxTs : Number() from accumulate( GlucoseMeasurement( $t: timestamp ) over window:time(16m), max($t) )
+    $first : GlucoseMeasurement( timestamp == $minTs.longValue(), $v1: value ) over window:time(16m)
+    $last  : GlucoseMeasurement( timestamp == $maxTs.longValue(),  $v2: value ) over window:time(16m)
 then
-  sugg.send( new Suggestion("Low glucose risk → take fast carbs (~15g), recheck in 15 min.", 1) );
+    double minutes = ($last.getTimestamp() - $first.getTimestamp()) / 60000.0;
+//    if (minutes <= 0) return;
+    double rate = ($last.getValue() - $first.getValue()) / minutes;
+    double delta = $last.getValue() - $first.getValue();
+    System.out.println("TrendSignal: rate=" + rate + " delta=" + delta + " over " + minutes + " min");
+    insertLogical(new TrendSignal(rate, delta));
 end
 
-rule "Hyper guard"
-salience 90
+// mutually exclusive classification
+rule "UP fast" activation-group "trend-classify"
 when
-  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min, $minsIns : minutesSinceInsulin )
-  eval( $g > 10.0 || ($g > 9.0 && $d >= 0.15) )
+    TrendSignal( rate >= fastRateMgPerMin )
 then
-  String msg = "High glucose trend → consider correction; beware stacking.";
-  if ($minsIns != null && $minsIns < 120L) msg += " Recent insulin " + $minsIns + " min.";
-  sugg.send( new Suggestion(msg, 2) );
+    insertLogical(new Trend(TrendType.UP, 1));
 end
 
-rule "Post-meal fast rise"
-salience 80
+rule "UP slow" activation-group "trend-classify"
 when
-  $ctx : GlucoseContext( $d : delta5min, $minsMeal : minutesSinceMeal )
-  eval( $minsMeal != null && $minsMeal <= 120L && $d >= 0.25 )
+    TrendSignal( rate >= stableBandMgPerMin, rate < fastRateMgPerMin )
 then
-  sugg.send( new Suggestion("Rapid post-meal rise → verify bolus/ratio; consider a short walk.", 3) );
+    insertLogical(new Trend(TrendType.UP, 2));
 end
 
-rule "Stable no action"
-salience -10
-when
-  $ctx : GlucoseContext( $g : currentMmol, $d : delta5min )
-  eval( $g >= 4.0 && $g <= 10.0 && Math.abs($d) < 0.12 )
+rule "STABLE" activation-group "trend-classify"
+    when TrendSignal( rate > -stableBandMgPerMin, rate <  stableBandMgPerMin )
 then
-  sugg.send( new Suggestion("Stable in range; no action.", 99) );
+    insertLogical(new Trend(TrendType.STABLE, 1));
+end
+
+rule "DOWN slow" activation-group "trend-classify"
+when
+    TrendSignal( rate <= -stableBandMgPerMin, rate > -fastRateMgPerMin )
+then
+    insertLogical(new Trend(TrendType.DOWN, 2));
+end
+
+rule "DOWN fast" activation-group "trend-classify"
+when
+    TrendSignal( rate <= -fastRateMgPerMin )
+then
+    insertLogical(new Trend(TrendType.DOWN, 1));
+end
+
+rule "Trend channel"
+when
+    $t : Trend()
+then
+    trend.send($t);
+    delete($t); // change later
 end

@@ -28,6 +28,9 @@ public class SensorService {
 
         var req = RequestEntity.get(uri).build();
         var resp = restTemplate.exchange(req, new ParameterizedTypeReference<List<GlucoseMessage>>() {});
+
+        assert resp.getBody() != null;
+        resp.getBody().forEach(System.out::println);
         return resp.getBody();
     }
 }
