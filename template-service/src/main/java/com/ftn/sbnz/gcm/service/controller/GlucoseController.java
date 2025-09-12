@@ -34,6 +34,6 @@ public class GlucoseController {
         GlucoseMeasurement gm = new GlucoseMeasurement(mmol, tMillis);
         System.out.println(gm);
 
-        ruleEngine.evaluateAndPublish(gm);
+        ruleEngine.evaluateAndPublish(gm, true);
     }
 }

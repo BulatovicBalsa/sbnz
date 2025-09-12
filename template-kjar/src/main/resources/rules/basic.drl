@@ -3,8 +3,10 @@ package com.ftn.sbnz.gcm.rules
 import com.ftn.sbnz.gcm.model.models.Trend;
 import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
 import com.ftn.sbnz.gcm.model.models.GlucoseTrendConfig;
+import com.ftn.sbnz.gcm.model.models.InsulinEvent;
 import com.ftn.sbnz.gcm.model.enums.TrendType;
-import java.util.List;
+import java.util.List
+import com.ftn.sbnz.gcm.model.models.Suggestion;
 
 global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
@@ -15,6 +17,12 @@ global GlucoseTrendConfig config;
 declare TrendSignal
     netDelta : double
     maxDelta : double
+end
+
+declare CorrectionNeeded
+    @role(event)
+    @timestamp(timestamp)
+    timestamp : long
 end
 
 rule "Build TrendSignal (true 16m sliding window)"
@@ -38,9 +46,6 @@ then
         double delta = Math.abs(next.getValue() - current.getValue());
         if (delta > maxDelta) maxDelta = delta;
     }
-
-    System.out.println("TrendSignal: netDelta=" + netDelta + ", maxDelta=" + maxDelta);
-    System.out.println("Elements: " + $samples.size() + ", first=" + first + ", last=" + last);
 
     insertLogical(new TrendSignal(netDelta, maxDelta));
 end
@@ -92,5 +97,54 @@ when
     $t : Trend()
 then
     trend.send($t);
-    delete($t); // change later
+end
+
+// 1) Raise a correction-needed flag if UP trend + high glucose + no insulin within 30m after that reading
+rule "Corrective action for UP trend"
+when
+    Trend( direction == TrendType.UP )
+    $gm: GlucoseMeasurement( value > 9.9 )
+    not( InsulinEvent( this after[0s, 30m] $gm ) )
+    not( CorrectionNeeded() ) // avoid duplicates
+then
+    System.out.println("High glucose with UP trend and no recent insulin, suggesting correction.");
+    insert(new CorrectionNeeded(System.currentTimeMillis()));
+end
+
+rule "Suggest correction"
+when
+    CorrectionNeeded()
+    $maxVal: Number() from accumulate(
+      $g: GlucoseMeasurement() over window:time(30m),
+      max( $g.getValue() )
+    )
+    Double( this > 9.9 ) from $maxVal.doubleValue()
+    not Trend( direction == TrendType.UP )
+then
+    // simple heuristic: ceil((glucose - 7)/2), floor at 0
+    int units = (int) Math.max(0, Math.ceil( ($maxVal.doubleValue() - 7.0) / 2.0 ));
+    String message = "Consider taking " + units + " units of insulin to correct high glucose.";
+    sugg.send( new Suggestion(message, units) );
+end
+
+// 3) Optional: explicit cleanup (usually not needed due to insertLogical above).
+//    If you keep it, make sure both sides are events with timestamps.
+rule "Remove correction need after insulin event (redundant if using insertLogical)"
+salience -10
+when
+    $cn: CorrectionNeeded()
+    InsulinEvent( this after[0s, *] $cn )
+then
+    retract($cn);
+    System.out.println("Correction made, suggestion no longer needed.");
+end
+
+rule "Remove correction need after glucose back to normal"
+salience -10
+when
+    $cn: CorrectionNeeded()
+    GlucoseMeasurement( value <= 9.9, this after[0s, *] $cn )
+then
+    retract($cn);
+    System.out.println("Glucose back to normal, suggestion no longer needed.");
 end

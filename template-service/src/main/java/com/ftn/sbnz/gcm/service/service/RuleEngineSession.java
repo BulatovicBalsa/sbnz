@@ -44,12 +44,24 @@ public class RuleEngineSession {
         kieSession.setGlobal("config", new GlucoseTrendConfig());
     }
 
-    public void evaluateAndPublish(GlucoseMeasurement gm) {
+    public void evaluateAndPublish(GlucoseMeasurement gm, boolean shouldFire) {
+        updateTime();
+
+        kieSession.insert(gm);
+
+        if (shouldFire)
+            kieSession.fireAllRules();
+    }
+
+    public void insertEvent(TimelineEvent event) {
+        updateTime();
+        kieSession.insert(event);
+        kieSession.fireAllRules();
+    }
+
+    private void updateTime() {
         SessionPseudoClock clock = kieSession.getSessionClock();
         long past = clockService.now() - clock.getCurrentTime();
         clock.advanceTime(past, java.util.concurrent.TimeUnit.MILLISECONDS);
-
-        kieSession.insert(gm);
-        kieSession.fireAllRules();
     }
 }

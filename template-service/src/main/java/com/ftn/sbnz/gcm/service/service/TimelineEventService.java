@@ -21,6 +21,7 @@ public class TimelineEventService {
 
     private final TimelineEventRepository timelineEventRepository;
     private final FoodRepository foodRepository;
+    private final RuleEngineSession ruleEngineSession;
 
     public TimelineEventDtos.TimelineEventListDto list(Long from, Long to) {
         List<TimelineEventDtos.FoodEventDto> foodEvents = timelineEventRepository.findFoodEventsInRange(from, to).stream()
@@ -53,6 +54,8 @@ public class TimelineEventService {
         FoodEvent fe = new FoodEvent(null, in.getAt(), amounts);
 
         fe = timelineEventRepository.save(fe);
+
+        ruleEngineSession.insertEvent(fe);
         return TimelineEventDtos.FoodEventDto.fromEntity(fe);
     }
 
@@ -63,6 +66,8 @@ public class TimelineEventService {
         }
         InsulinEvent ie = new InsulinEvent(null, in.getAt(), in.getAmount());
         ie = timelineEventRepository.save(ie);
+
+        ruleEngineSession.insertEvent(ie);
         return TimelineEventDtos.InsulinEventDto.fromEntity(ie);
     }
 
@@ -70,6 +75,8 @@ public class TimelineEventService {
     public TimelineEventDtos.ActivityEventDto create(@Valid TimelineEventDtos.ActivityEventDto in) {
         ActivityEvent ae = new ActivityEvent(null, in.getAt(), in.getDuration(), in.getIntensity());
         ae = timelineEventRepository.save(ae);
+
+        ruleEngineSession.insertEvent(ae);
         return TimelineEventDtos.ActivityEventDto.fromEntity(ae);
     }
 }

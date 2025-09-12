@@ -37,7 +37,7 @@ public class GlucoseHandler extends TextWebSocketHandler {
             if (session != null)
                 session.sendMessage(new TextMessage(om.writeValueAsString(msg)));
 
-            ruleEngineSession.evaluateAndPublish(new GlucoseMeasurement(msg.getMmol(), msg.getT()));
+            ruleEngineSession.evaluateAndPublish(new GlucoseMeasurement(msg.getMmol(), msg.getT()), false);
         }
     }
 

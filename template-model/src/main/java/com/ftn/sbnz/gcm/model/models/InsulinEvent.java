@@ -1,6 +1,9 @@
 package com.ftn.sbnz.gcm.model.models;
 
 import lombok.*;
+import org.kie.api.definition.type.Role;
+import org.kie.api.definition.type.Timestamp;
+
 import javax.persistence.*;
 import java.util.UUID;
 
@@ -10,6 +13,8 @@ import java.util.UUID;
 @Getter @Setter
 @NoArgsConstructor
 @AllArgsConstructor @Builder
+@Role(Role.Type.EVENT)
+@Timestamp("at")
 public class InsulinEvent extends TimelineEvent {
 
     /** Units taken (U). */
