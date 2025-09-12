@@ -9,5 +9,4 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Suggestion {
     private String text;
-    private int priority;
 }
