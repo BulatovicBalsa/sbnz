@@ -1,7 +1,7 @@
 <kmodule xmlns="http://www.drools.org/xsd/kmodule">
 
     <kbase name="rules" packages="com.ftn.sbnz.gcm.rules" eventProcessingMode="stream">
-        <ksession name="rulesSession" clockType="realtime"/>
+        <ksession name="rulesSession" clockType="pseudo"/>
     </kbase>
 
 </kmodule>

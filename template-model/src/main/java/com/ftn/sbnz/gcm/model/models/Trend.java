@@ -17,9 +17,9 @@ public class Trend {
             case STABLE:
                 return "→";
             case UP:
-                return strength == 1 ? "↑" : "↗";
+                return strength == 2 ? "↑" : "↗";
             case DOWN:
-                return strength == 1 ? "↓" : "↘";
+                return strength == 2 ? "↓" : "↘";
             default:
                 return "-";
         }

@@ -2,72 +2,87 @@ package com.ftn.sbnz.gcm.rules
 
 import com.ftn.sbnz.gcm.model.models.Trend;
 import com.ftn.sbnz.gcm.model.models.GlucoseMeasurement;
+import com.ftn.sbnz.gcm.model.models.GlucoseTrendConfig;
 import com.ftn.sbnz.gcm.model.enums.TrendType;
+import java.util.List;
 
 global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
 
-global Double stableRate;
-global Double fastRate;
+global GlucoseTrendConfig config;
 
 
 declare TrendSignal
-    rate : double
-    delta : double
+    netDelta : double
+    maxDelta : double
 end
 
 rule "Build TrendSignal (true 16m sliding window)"
 salience 10
 when
-    $current : GlucoseMeasurement()
-
-    // Find a measurement from approximately 16 minutes ago
-    $old : GlucoseMeasurement(
-        timestamp <= ($current.timestamp - 14 * 60 * 1000), // At least 15 min ago
-        timestamp >= ($current.timestamp - 17 * 60 * 1000)  // But not more than 17 min ago
+    $samples : List(size >= 3) from accumulate(
+        $gm: GlucoseMeasurement() over window:time(16m),
+        collectList($gm)
     )
 then
-    double minutes = ($current.getTimestamp() - $old.getTimestamp()) / 60000.0;
-    double delta = $current.getValue() - $old.getValue();
-    double rate = delta / minutes;
 
-    System.out.println("Sliding TrendSignal: rate=" + rate + " delta=" + delta + " over " + minutes + " min");
-    System.out.println("  From: " + $old.getValue() + " to " + $current.getValue());
+    double first = ((GlucoseMeasurement) $samples.get(0)).getValue();
+    double last = ((GlucoseMeasurement) $samples.get($samples.size() - 1)).getValue();
+    double netDelta = last - first;
 
-    insertLogical(new TrendSignal(rate, delta));
+    double maxDelta = 0.0;
+    for (int i = 0; i < $samples.size() - 1; i++) {
+        GlucoseMeasurement current = (GlucoseMeasurement) $samples.get(i);
+        GlucoseMeasurement next = (GlucoseMeasurement) $samples.get(i + 1);
+
+        double delta = Math.abs(next.getValue() - current.getValue());
+        if (delta > maxDelta) maxDelta = delta;
+    }
+
+    System.out.println("TrendSignal: netDelta=" + netDelta + ", maxDelta=" + maxDelta);
+    System.out.println("Elements: " + $samples.size() + ", first=" + first + ", last=" + last);
+
+    insertLogical(new TrendSignal(netDelta, maxDelta));
+end
+
+rule "UNKNOWN trend"
+when
+    TrendSignal( Math.abs(netDelta) < config.stableNetDeltaThreshold, maxDelta > config.maxDeltaSpikeThreshold )
+then
+    insertLogical(new Trend(TrendType.UNKNOWN, 0));
 end
 
 // mutually exclusive classification
 rule "UP fast" activation-group "trend-classify"
 when
-    TrendSignal( rate >= fastRate )
+    TrendSignal( netDelta > config.strongUpThreshold )
 then
     insertLogical(new Trend(TrendType.UP, 2));
 end
 
 rule "UP slow" activation-group "trend-classify"
 when
-    TrendSignal( rate >= stableRate, rate < fastRate )
+    TrendSignal( netDelta > config.slightUpThreshold, netDelta <= config.strongUpThreshold )
 then
     insertLogical(new Trend(TrendType.UP, 1));
 end
 
 rule "STABLE" activation-group "trend-classify"
-    when TrendSignal( rate > -stableRate, rate <  stableRate )
+    when TrendSignal( netDelta >= config.slightDownThreshold, netDelta <= config.slightUpThreshold )
 then
     insertLogical(new Trend(TrendType.STABLE, 1));
 end
 
-rule "DOWN slow" activation-group "trend-classify"
+rule "DOWN fast" activation-group "trend-classify"
 when
-    TrendSignal( rate <= -stableRate, rate > -fastRate )
+    TrendSignal( netDelta < config.strongDownThreshold )
 then
     insertLogical(new Trend(TrendType.DOWN, 2));
 end
 
-rule "DOWN fast" activation-group "trend-classify"
+rule "DOWN slow" activation-group "trend-classify"
 when
-    TrendSignal( rate <= -fastRate )
+    TrendSignal( netDelta < config.slightDownThreshold && netDelta >= config.strongDownThreshold )
 then
     insertLogical(new Trend(TrendType.DOWN, 1));
 end

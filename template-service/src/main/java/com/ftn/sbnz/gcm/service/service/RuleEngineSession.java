@@ -6,7 +6,10 @@ import com.ftn.sbnz.gcm.service.ws.TrendHandler;
 import lombok.RequiredArgsConstructor;
 import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
+import org.kie.api.time.SessionPseudoClock;
 import org.springframework.stereotype.Service;
+
+import javax.annotation.PostConstruct;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ public class RuleEngineSession {
     private final ClockService clockService;
     private KieSession kieSession;
 
+    @PostConstruct
     public void initSession() {
         if (kieSession != null) {
             kieSession.dispose();
@@ -37,14 +41,14 @@ public class RuleEngineSession {
         kieSession.setGlobal("trend", kieSession.getChannels().get("trend"));
         kieSession.setGlobal("sugg",  kieSession.getChannels().get("sugg"));
 
-        kieSession.setGlobal("stableRate", 0.033);
-        kieSession.setGlobal("fastRate", 0.055);
+        kieSession.setGlobal("config", new GlucoseTrendConfig());
     }
 
     public void evaluateAndPublish(GlucoseMeasurement gm) {
-        if (kieSession == null) {
-            return;
-        }
+        SessionPseudoClock clock = kieSession.getSessionClock();
+        long past = clockService.now() - clock.getCurrentTime();
+        clock.advanceTime(past, java.util.concurrent.TimeUnit.MILLISECONDS);
+
         kieSession.insert(gm);
         kieSession.fireAllRules();
     }
