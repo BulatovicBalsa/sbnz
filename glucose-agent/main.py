@@ -27,6 +27,12 @@ STEP_SECONDS = 300  # 5 minutes (simulated)
 BASE_MMOL = 6.5
 SEED = 42
 
+# Wave parameters
+WAVE_MIN_MMOL = 7.0
+WAVE_MAX_MMOL = 14.0
+WAVE_PERIOD_MINUTES = 60  # period of one full wave in simulated minutes
+WAVE_JITTER_SD = 0.2      # small random noise to avoid perfect regularity
+
 # ========= Globals =========
 t0_real_server = None  # Fetched at startup
 samples = []  # In-memory list of {"t": ..., "mmol": ...}
@@ -55,14 +61,23 @@ def fetch_t0_real():
             print(f"[init] Failed to fetch t0Real: {e}")
             time.sleep(2)
 
+def wave_mmol(sim_ms: int) -> float:
+    """Smooth sine wave mapped to [WAVE_MIN_MMOL, WAVE_MAX_MMOL]."""
+    period_ms = max(1, WAVE_PERIOD_MINUTES * 60 * 1000)  # avoid div-by-zero
+    phase = (sim_ms % period_ms) / period_ms  # 0..1
+    mid = (WAVE_MIN_MMOL + WAVE_MAX_MMOL) / 2.0
+    amp = (WAVE_MAX_MMOL - WAVE_MIN_MMOL) / 2.0
+    base = mid + amp * math.sin(2 * math.pi * phase)
+    mmol = base + rng.gauss(0, WAVE_JITTER_SD)
+    return round(min(WAVE_MAX_MMOL, max(WAVE_MIN_MMOL, mmol)), 1)
+
 def circadian_drift(sim_ms: int, amp: float = 0.6) -> float:
     day_ms = 24 * 60 * 60 * 1000
     phase = (sim_ms % day_ms) / day_ms
     return amp * math.sin(2 * math.pi * phase)
 
 def generate_sample(sim_ms: int) -> dict:
-    mmol = BASE_MMOL + circadian_drift(sim_ms, amp=0.6) + rng.gauss(0, 0.3)
-    mmol = round(max(2.0, min(20.0, mmol)), 1)
+    mmol = wave_mmol(sim_ms)
     return {"t": sim_ms, "mmol": mmol}
 
 def generate_initial_history(hours: int = 1):
