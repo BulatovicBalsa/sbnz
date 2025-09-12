@@ -12,6 +12,7 @@ global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
 
 global GlucoseTrendConfig config;
+global org.kie.api.time.SessionClock droolsClock;
 
 
 declare TrendSignal
@@ -113,26 +114,28 @@ rule "Corrective action for UP trend"
 when
     Trend( direction == TrendType.UP )
     $gm: GlucoseMeasurement( value > 9.9 )
-    not( InsulinEvent( this after[0s, 30m] $gm ) )
+    not( GlucoseMeasurement( timestamp > $gm.timestamp ) )  // Only latest glucose
+    not( InsulinEvent( at >= ($gm.getTimestamp() - 1800000) ) ) // 30min before glucose
     not( CorrectionNeeded() ) // avoid duplicates
 then
-    System.out.println("High glucose with UP trend and no recent insulin, suggesting correction.");
-    insert(new CorrectionNeeded(System.currentTimeMillis()));
+    System.out.println("High glucose with UP trend and no recent insulin, suggesting correction." + $gm);
+    CorrectionNeeded cn = new CorrectionNeeded();
+    cn.setTimestamp( droolsClock.getCurrentTime() );
+    insert(cn);
 end
 
 rule "Suggest correction"
 when
     CorrectionNeeded()
-    $maxVal: Number() from accumulate(
-      $g: GlucoseMeasurement() over window:time(30m),
-      max( $g.getValue() )
-    )
-    Double( this > 9.9 ) from $maxVal.doubleValue()
+    $latest: GlucoseMeasurement()
+    not( GlucoseMeasurement( timestamp > $latest.timestamp ) ) // only latest
+    // glucose > 9.9 checked in previous rule
+    eval( $latest.getValue() > 9.9 )
     not Trend( direction == TrendType.UP )
 then
     // simple heuristic: ceil((glucose - 7)/2), floor at 0
-    int units = (int) Math.max(0, Math.ceil( ($maxVal.doubleValue() - 7.0) / 2.0 ));
-    String message = "Consider taking " + units + " units of insulin to correct high glucose.";
+    int units = (int) Math.max(0, Math.ceil( ($latest.getValue() - 7.0) / 2.0 ));
+    String message = "Consider taking " + units + " units of insulin to correct high glucose. " + $latest;
     sugg.send( new Suggestion(message, units) );
 end
 

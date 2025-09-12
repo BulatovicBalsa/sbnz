@@ -11,6 +11,7 @@ import java.util.UUID;
 @Getter @Setter
 @NoArgsConstructor
 @AllArgsConstructor @Builder
+@ToString
 public class FoodEvent extends TimelineEvent {
 
     @OneToMany(cascade = CascadeType.ALL, fetch = FetchType.EAGER)

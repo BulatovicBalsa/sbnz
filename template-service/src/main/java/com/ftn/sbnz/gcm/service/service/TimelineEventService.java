@@ -68,6 +68,7 @@ public class TimelineEventService {
         ie = timelineEventRepository.save(ie);
 
         ruleEngineSession.insertEvent(ie);
+        System.out.println(ie);
         return TimelineEventDtos.InsulinEventDto.fromEntity(ie);
     }
 

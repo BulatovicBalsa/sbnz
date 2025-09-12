@@ -11,6 +11,7 @@ import java.util.UUID;
 @Getter @Setter
 @NoArgsConstructor
 @AllArgsConstructor @Builder
+@ToString
 public class ActivityEvent extends TimelineEvent {
     @Column(nullable = false)
     private Integer duration;

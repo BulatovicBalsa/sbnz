@@ -11,6 +11,7 @@ import java.util.UUID;
 @Table(name = "event_insulin")
 @DiscriminatorValue("INSULIN")
 @Getter @Setter
+@ToString
 @NoArgsConstructor
 @AllArgsConstructor @Builder
 @Role(Role.Type.EVENT)

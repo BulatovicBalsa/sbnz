@@ -42,6 +42,7 @@ public class RuleEngineSession {
         kieSession.setGlobal("sugg",  kieSession.getChannels().get("sugg"));
 
         kieSession.setGlobal("config", new GlucoseTrendConfig());
+        kieSession.setGlobal("droolsClock", kieSession.getSessionClock());
     }
 
     public void evaluateAndPublish(GlucoseMeasurement gm, boolean shouldFire) {
