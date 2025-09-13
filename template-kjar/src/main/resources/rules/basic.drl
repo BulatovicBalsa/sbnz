@@ -6,8 +6,10 @@ import com.ftn.sbnz.gcm.model.models.GlucoseTrendConfig;
 import com.ftn.sbnz.gcm.model.models.InsulinEvent;
 import com.ftn.sbnz.gcm.model.models.FoodConstraint;
 import com.ftn.sbnz.gcm.model.enums.TrendType;
+import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
 import java.util.List
 import com.ftn.sbnz.gcm.model.models.Suggestion;
+import com.ftn.sbnz.gcm.model.models.Food;
 
 global org.kie.api.runtime.Channel trend; // emits Trend
 global org.kie.api.runtime.Channel sugg;  // emits Suggestion
@@ -164,9 +166,104 @@ then
     sugg.send( new Suggestion("Glucose back to normal, no correction needed.") );
 end
 
-rule "Suggest Food"
+rule "Suggest Food With Lower Glycemic Index"
 when
-    $foodConstraint: FoodConstraint()
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.LOW )
+    $foods: List(size > 0) from accumulate(
+        $f: Food(
+            carbs >= $foodConstraint.minCarbs,
+            carbs <= $foodConstraint.maxCarbs,
+            fats <= $foodConstraint.maxFats,
+            glycemicIndex < 55
+        ),
+        collectList($f)
+    )
 then
-    System.out.println("Food constraint generated: " + $foodConstraint);
+    Food first = (Food) $foods.get(0);
+    String message = "Based on your recent glucose levels and activity, consider eating " + first;
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+rule "Suggest Dairy if No Food Found (Low GI)"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.LOW )
+    not Food(
+        carbs >= $foodConstraint.minCarbs,
+        carbs <= $foodConstraint.maxCarbs,
+        fats <= $foodConstraint.maxFats,
+        glycemicIndex < 55
+    )
+then
+    String message = "No suitable low GI food found, consider eating a serving of dairy (e.g., yogurt or milk).";
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+rule "Suggest Food With Medium Glycemic Index"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.MEDIUM )
+    $foods: List(size > 0) from accumulate(
+        $f: Food(
+            carbs >= $foodConstraint.minCarbs,
+            carbs <= $foodConstraint.maxCarbs,
+            fats <= $foodConstraint.maxFats,
+            glycemicIndex >= 55, glycemicIndex <= 69
+        ),
+        collectList($f)
+    )
+then
+    Food first = (Food) $foods.get(0);
+    String message = "Based on your recent glucose levels and activity, consider eating " + first;
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+rule "Suggest High Protein Snack if No Food Found (Medium GI)"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.MEDIUM )
+    not Food(
+        carbs >= $foodConstraint.minCarbs,
+        carbs <= $foodConstraint.maxCarbs,
+        fats <= $foodConstraint.maxFats,
+        glycemicIndex >= 55, glycemicIndex <= 69
+    )
+then
+    String message = "No suitable medium GI food found, consider eating a high-protein snack (e.g., nuts or cheese).";
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+rule "Suggest Food With High Glycemic Index"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.HIGH )
+    $foods: List() from accumulate(
+        $f: Food(
+            carbs >= $foodConstraint.minCarbs,
+            carbs <= $foodConstraint.maxCarbs,
+            fats <= $foodConstraint.maxFats,
+            glycemicIndex >= 70
+        ),
+        collectList($f)
+    )
+then
+    Food first = (Food) $foods.get(0);
+    String message = "Based on your recent glucose levels and activity, consider eating " + first;
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+rule "Suggest Juice if No Food Found (High GI)"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.HIGH )
+    not Food(
+        carbs >= $foodConstraint.minCarbs,
+        carbs <= $foodConstraint.maxCarbs,
+        fats <= $foodConstraint.maxFats,
+        glycemicIndex >= 70
+    )
+then
+    String message = "No suitable high GI food found, consider drinking a glass of juice for quick glucose boost.";
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
 end
