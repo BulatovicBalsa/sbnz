@@ -44,7 +44,7 @@ function Dashboard() {
 
     // Glucose stream
     const [samples, setSamples] = useState<GlucoseSample[]>([]);
-    const [suggestion, setSuggestion] = useState<SuggestionMessage | null>(null);
+    const [suggestions, setSuggestions] = useState<SuggestionMessage[]>([]);
 
     const closeGlucoseRef = React.useRef<null | (() => void)>(null);
     const closeSugRef = React.useRef<null | (() => void)>(null);
@@ -93,7 +93,7 @@ function Dashboard() {
         closeSugRef.current = openSuggestionsWS(SUG_WS, (msg) => {
             if (typeof msg?.at === 'number' && typeof msg?.text === 'string') {
                 console.log("Received suggestion:", msg);
-                setSuggestion(msg);
+                setSuggestions(prev => [{ ...msg }, ...prev]);
             }
         });
         return () => closeSugRef.current?.();
@@ -133,7 +133,7 @@ function Dashboard() {
                     <Separator />
                     <GlucoseChart data={samples} trend={trend} simNow={simNow} events={events} foodCatalog={foodCatalog} />
                     <Separator />
-                    <SuggestionBox current={suggestion} />
+                    <SuggestionBox suggestions={suggestions} />
                 </div>
             </Content>
         </Shell>
