@@ -64,14 +64,15 @@ end
 rule "Build TrendSignal (weighted recent values)"
 salience 10
 when
-    $samples : List(size >= 3) from accumulate(
-        $gm: GlucoseMeasurement() over window:time(16m),
-        collectList($gm)
-    )
+    $samples : List( size >= 3 )
+        from accumulate(
+            $gm : GlucoseMeasurement() over window:time(16m),
+            collectList($gm)
+        )
+    $weightedDelta : Double() from getWeightedDelta($samples)
+    $maxDelta      : Double() from calculateMaxDelta($samples)
 then
-    double weightedDelta = getWeightedDelta($samples);
-    double maxDelta = calculateMaxDelta($samples);
-    insertLogical(new TrendSignal(weightedDelta, maxDelta));
+    insertLogical(new TrendSignal($weightedDelta, $maxDelta));
 end
 
 rule "UNKNOWN trend"
