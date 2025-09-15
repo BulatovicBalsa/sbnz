@@ -7,7 +7,7 @@ import com.ftn.sbnz.gcm.model.models.InsulinEvent;
 import com.ftn.sbnz.gcm.model.models.FoodConstraint;
 import com.ftn.sbnz.gcm.model.enums.TrendType;
 import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
-import java.util.List
+import java.util.List;
 import com.ftn.sbnz.gcm.model.models.Suggestion;
 import com.ftn.sbnz.gcm.model.models.Food;
 
@@ -17,6 +17,38 @@ global org.kie.api.runtime.Channel sugg;  // emits Suggestion
 global GlucoseTrendConfig config;
 global org.kie.api.time.SessionClock droolsClock;
 
+// Utility function to calculate maximum absolute delta between consecutive glucose measurements
+function double calculateMaxDelta(List samples) {
+    double maxDelta = 0.0;
+    for (int i = 0; i < samples.size() - 1; i++) {
+        GlucoseMeasurement current = (GlucoseMeasurement) samples.get(i);
+        GlucoseMeasurement next = (GlucoseMeasurement) samples.get(i + 1);
+        double delta = Math.abs(next.getValue() - current.getValue());
+        if (delta > maxDelta) {
+            maxDelta = delta;
+        }
+    }
+    return maxDelta;
+}
+
+// Utility function to calculate weighted delta combining recent and overall trend
+function double getWeightedDelta(List samples) {
+    if (samples == null || samples.size() < 2) return 0.0;
+
+    double first = ((GlucoseMeasurement) samples.get(0)).getValue();
+    double last = ((GlucoseMeasurement) samples.get(samples.size() - 1)).getValue();
+
+    // Original net delta
+    double netDelta = last - first;
+
+    // Recent trend (last up to 3 measurements)
+    int recentCount = Math.min(3, samples.size());
+    double recentFirst = ((GlucoseMeasurement) samples.get(samples.size() - recentCount)).getValue();
+    double recentDelta = last - recentFirst;
+
+    // Weighted combination: 60% recent trend, 40% overall trend
+    return 0.6 * recentDelta + 0.4 * netDelta;
+}
 
 declare TrendSignal
     netDelta : double
@@ -37,29 +69,8 @@ when
         collectList($gm)
     )
 then
-    double first = ((GlucoseMeasurement) $samples.get(0)).getValue();
-    double last = ((GlucoseMeasurement) $samples.get($samples.size() - 1)).getValue();
-
-    // Original net delta
-    double netDelta = last - first;
-
-    // Recent trend (last 2-3 measurements)
-    int recentCount = Math.min(3, $samples.size());
-    double recentFirst = ((GlucoseMeasurement) $samples.get($samples.size() - recentCount)).getValue();
-    double recentDelta = last - recentFirst;
-
-    // Weighted combination: 60% recent trend, 40% overall trend
-    double weightedDelta = 0.6 * recentDelta + 0.4 * netDelta;
-
-    // Calculate maxDelta as before...
-    double maxDelta = 0.0;
-    for (int i = 0; i < $samples.size() - 1; i++) {
-        GlucoseMeasurement current = (GlucoseMeasurement) $samples.get(i);
-        GlucoseMeasurement next = (GlucoseMeasurement) $samples.get(i + 1);
-        double delta = Math.abs(next.getValue() - current.getValue());
-        if (delta > maxDelta) maxDelta = delta;
-    }
-
+    double weightedDelta = getWeightedDelta($samples);
+    double maxDelta = calculateMaxDelta($samples);
     insertLogical(new TrendSignal(weightedDelta, maxDelta));
 end
 
