@@ -75,47 +75,6 @@ then
     insertLogical(new TrendSignal($weightedDelta, $maxDelta));
 end
 
-rule "UNKNOWN trend"
-when
-    TrendSignal( Math.abs(netDelta) < config.stableNetDeltaThreshold, maxDelta > config.maxDeltaSpikeThreshold )
-then
-    insertLogical(new Trend(TrendType.UNKNOWN, 0));
-end
-
-// mutually exclusive classification
-rule "UP fast" activation-group "trend-classify"
-when
-    TrendSignal( netDelta > config.strongUpThreshold )
-then
-    insertLogical(new Trend(TrendType.UP, 2));
-end
-
-rule "UP slow" activation-group "trend-classify"
-when
-    TrendSignal( netDelta > config.slightUpThreshold, netDelta <= config.strongUpThreshold )
-then
-    insertLogical(new Trend(TrendType.UP, 1));
-end
-
-rule "STABLE" activation-group "trend-classify"
-    when TrendSignal( netDelta >= config.slightDownThreshold, netDelta <= config.slightUpThreshold )
-then
-    insertLogical(new Trend(TrendType.STABLE, 1));
-end
-
-rule "DOWN fast" activation-group "trend-classify"
-when
-    TrendSignal( netDelta < config.strongDownThreshold )
-then
-    insertLogical(new Trend(TrendType.DOWN, 2));
-end
-
-rule "DOWN slow" activation-group "trend-classify"
-when
-    TrendSignal( netDelta < config.slightDownThreshold && netDelta >= config.strongDownThreshold )
-then
-    insertLogical(new Trend(TrendType.DOWN, 1));
-end
 
 rule "Trend channel"
 when

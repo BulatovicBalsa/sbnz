@@ -1,0 +1,6 @@
+name|condition|type|strength
+UP fast|netDelta > config.strongUpThreshold|UP|2
+UP slow|netDelta > config.slightUpThreshold, netDelta <= config.strongUpThreshold|UP|1
+STABLE|netDelta >= config.slightDownThreshold, netDelta <= config.slightUpThreshold|STABLE|1
+DOWN fast|netDelta < config.strongDownThreshold|DOWN|2
+DOWN slow|netDelta < config.slightDownThreshold, netDelta >= config.strongDownThreshold|DOWN|1

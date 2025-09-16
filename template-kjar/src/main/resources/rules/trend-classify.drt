@@ -1,0 +1,22 @@
+template header
+name
+condition
+type
+strength
+
+package com.ftn.sbnz.gcm.rules
+
+import com.ftn.sbnz.gcm.model.models.Trend;
+import com.ftn.sbnz.gcm.model.enums.TrendType;
+import com.ftn.sbnz.gcm.model.models.TrendSignal;
+
+template "trend-classify"
+
+rule "Trend @{name}" activation-group "trend-classify"
+when
+    TrendSignal( @{condition} )
+then
+    insertLogical(new Trend(TrendType.@{type}, @{strength}));
+end
+
+end template

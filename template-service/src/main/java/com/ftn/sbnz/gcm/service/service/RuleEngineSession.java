@@ -2,9 +2,11 @@ package com.ftn.sbnz.gcm.service.service;
 
 import com.ftn.sbnz.gcm.model.enums.ActivityIntensity;
 import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
+import com.ftn.sbnz.gcm.model.enums.TrendType;
 import com.ftn.sbnz.gcm.model.models.*;
 import com.ftn.sbnz.gcm.service.ws.SuggestionHandler;
 import com.ftn.sbnz.gcm.service.ws.TrendHandler;
+import com.google.common.base.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.drools.template.ObjectDataCompiler;
@@ -14,7 +16,6 @@ import org.kie.api.KieServices;
 import org.kie.api.conf.EventProcessingOption;
 import org.kie.api.io.Resource;
 import org.kie.api.io.ResourceType;
-import org.kie.api.runtime.KieContainer;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.KieSessionConfiguration;
 import org.kie.api.runtime.conf.ClockTypeOption;
@@ -28,7 +29,6 @@ import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.util.List;
-import java.util.Properties;
 
 @Service
 @RequiredArgsConstructor
@@ -46,9 +46,16 @@ public class RuleEngineSession {
         }
 
         KieHelper kieHelper = new KieHelper();
-        String drl = loadTemplate();
-        kieHelper.addContent(drl, ResourceType.DRL);
 
+        // Compile food recommendation template rules
+        String foodDrl = loadTemplate("/rules/template.drl", this::loadFoodData);
+        kieHelper.addContent(foodDrl, ResourceType.DRL);
+
+        // Compile trend classification template rules
+        String trendClassifyDrl = loadTemplate("/rules/trend-classify.drt", this::loadTrendClassifyData);
+        kieHelper.addContent(trendClassifyDrl, ResourceType.DRL);
+
+        // Add base rules
         InputStream basicRules = RuleEngineSession.class.getResourceAsStream("/rules/basic.drl");
         Resource basicResource = ResourceFactory.newInputStreamResource(basicRules);
         kieHelper.addResource(basicResource, ResourceType.DRL);
@@ -101,18 +108,11 @@ public class RuleEngineSession {
         clock.advanceTime(past, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
-    private String loadTemplate() {
-        InputStream template = RuleEngineSession.class.getResourceAsStream("/rules/template.drl");
-        List<FoodRuleTemplate> data = loadData();
-
-        ObjectDataCompiler converter = new ObjectDataCompiler();
-        String drl = converter.compile(data, template);
-        return drl;
-    }
 
     @SneakyThrows
-    private List<FoodRuleTemplate> loadData() {
+    private List<FoodRuleTemplate> loadFoodData() {
         InputStream csv = RuleEngineSession.class.getResourceAsStream("/rules/template-data.csv");
+        assert csv != null;
 
         List<FoodRuleTemplate> templates = new java.util.ArrayList<>();
         BufferedReader reader = new BufferedReader(new InputStreamReader(csv));
@@ -136,5 +136,39 @@ public class RuleEngineSession {
         }
 
         return templates;
+    }
+
+    @SneakyThrows
+    private List<TrendClassifyTemplate> loadTrendClassifyData() {
+        InputStream csv = RuleEngineSession.class.getResourceAsStream("/rules/trend-classify.csv");
+        assert csv != null;
+
+        List<TrendClassifyTemplate> templates = new java.util.ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(csv));
+
+        String line;
+        reader.readLine(); // Skip header
+
+        while ((line = reader.readLine()) != null) {
+            if (line.trim().isEmpty()) continue;
+            String[] parts = line.split("\\|");
+            templates.add(new TrendClassifyTemplate(
+                parts[0],
+                parts[1],
+                TrendType.valueOf(parts[2]),
+                Integer.parseInt(parts[3])
+            ));
+        }
+
+        return templates;
+    }
+
+    // templateResourcePath, Action<List<T>> dataLoader) {
+    private String loadTemplate(String templateResourcePath, Supplier<List<?>> dataLoader) {
+        InputStream template = RuleEngineSession.class.getResourceAsStream(templateResourcePath);
+        List<?> data = dataLoader.get();
+
+        ObjectDataCompiler converter = new ObjectDataCompiler();
+        return converter.compile(data, template);
     }
 }
