@@ -1,0 +1,36 @@
+template header
+name
+giType
+giCondition
+
+package com.ftn.sbnz.gcm.rules
+
+import com.ftn.sbnz.gcm.model.models.FoodConstraint;
+import com.ftn.sbnz.gcm.model.models.Food;
+import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
+import com.ftn.sbnz.gcm.model.models.Suggestion;
+
+// Template for suggesting food when matching items exist for a GI category
+
+template "suggest-food"
+
+rule "Suggest @{name}"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.@{giType} )
+    $foods: java.util.List(size > 0) from accumulate(
+        $f: Food(
+            carbs >= $foodConstraint.minCarbs,
+            carbs <= $foodConstraint.maxCarbs,
+            fats <= $foodConstraint.maxFats,
+            @{giCondition}
+        ),
+        collectList($f)
+    )
+then
+    Food first = (Food) $foods.get(0);
+    String message = "Based on your recent glucose levels and activity, consider eating " + first;
+    sugg.send( new Suggestion(message) );
+    retract($foodConstraint);
+end
+
+end template

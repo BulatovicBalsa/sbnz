@@ -1,0 +1,4 @@
+name|giType|giCondition
+Low GI Suggestion|LOW|glycemicIndex < 55
+Medium GI Suggestion|MEDIUM|glycemicIndex >= 55, glycemicIndex <= 69
+High GI Suggestion|HIGH|glycemicIndex >= 70

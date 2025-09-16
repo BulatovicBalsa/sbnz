@@ -59,6 +59,10 @@ public class RuleEngineSession {
         String suggestNoFoodDrl = loadTemplate("/rules/suggest-no-food.drt", this::loadSuggestNoFoodData);
         kieHelper.addContent(suggestNoFoodDrl, ResourceType.DRL);
 
+        // Compile suggest-food rules
+        String suggestFoodDrl = loadTemplate("/rules/suggest-food.drt", this::loadSuggestFoodData);
+        kieHelper.addContent(suggestFoodDrl, ResourceType.DRL);
+
         // Add base rules
         InputStream basicRules = RuleEngineSession.class.getResourceAsStream("/rules/basic.drl");
         Resource basicResource = ResourceFactory.newInputStreamResource(basicRules);
@@ -185,6 +189,28 @@ public class RuleEngineSession {
                 GlycemicIndexType.valueOf(parts[1]),
                 parts[2],
                 parts[3]
+            ));
+        }
+        return templates;
+    }
+
+    @SneakyThrows
+    private List<SuggestFoodTemplate> loadSuggestFoodData() {
+        InputStream csv = RuleEngineSession.class.getResourceAsStream("/rules/suggest-food.csv");
+        assert csv != null;
+
+        List<SuggestFoodTemplate> templates = new java.util.ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(csv));
+
+        String line;
+        reader.readLine(); // Skip header
+        while ((line = reader.readLine()) != null) {
+            if (line.trim().isEmpty()) continue;
+            String[] parts = line.split("\\|");
+            templates.add(new SuggestFoodTemplate(
+                parts[0],
+                GlycemicIndexType.valueOf(parts[1]),
+                parts[2]
             ));
         }
         return templates;
