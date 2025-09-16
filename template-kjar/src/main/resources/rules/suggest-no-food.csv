@@ -1,0 +1,4 @@
+name|giType|giCondition|message
+Low GI Dairy|LOW|glycemicIndex < 55|No suitable low GI food found, consider eating a serving of dairy (e.g., yogurt or milk).
+Medium GI High-Protein Snack|MEDIUM|glycemicIndex >= 55, glycemicIndex <= 69|No suitable medium GI food found, consider eating a high-protein snack (e.g., nuts or cheese).
+High GI Juice|HIGH|glycemicIndex >= 70|No suitable high GI food found, consider drinking a glass of juice for quick glucose boost.

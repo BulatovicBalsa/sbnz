@@ -156,21 +156,6 @@ then
     retract($foodConstraint);
 end
 
-rule "Suggest Dairy if No Food Found (Low GI)"
-when
-    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.LOW )
-    not Food(
-        carbs >= $foodConstraint.minCarbs,
-        carbs <= $foodConstraint.maxCarbs,
-        fats <= $foodConstraint.maxFats,
-        glycemicIndex < 55
-    )
-then
-    String message = "No suitable low GI food found, consider eating a serving of dairy (e.g., yogurt or milk).";
-    sugg.send( new Suggestion(message) );
-    retract($foodConstraint);
-end
-
 rule "Suggest Food With Medium Glycemic Index"
 when
     $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.MEDIUM )
@@ -190,21 +175,6 @@ then
     retract($foodConstraint);
 end
 
-rule "Suggest High Protein Snack if No Food Found (Medium GI)"
-when
-    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.MEDIUM )
-    not Food(
-        carbs >= $foodConstraint.minCarbs,
-        carbs <= $foodConstraint.maxCarbs,
-        fats <= $foodConstraint.maxFats,
-        glycemicIndex >= 55, glycemicIndex <= 69
-    )
-then
-    String message = "No suitable medium GI food found, consider eating a high-protein snack (e.g., nuts or cheese).";
-    sugg.send( new Suggestion(message) );
-    retract($foodConstraint);
-end
-
 rule "Suggest Food With High Glycemic Index"
 when
     $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.HIGH )
@@ -220,21 +190,6 @@ when
 then
     Food first = (Food) $foods.get(0);
     String message = "Based on your recent glucose levels and activity, consider eating " + first;
-    sugg.send( new Suggestion(message) );
-    retract($foodConstraint);
-end
-
-rule "Suggest Juice if No Food Found (High GI)"
-when
-    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.HIGH )
-    not Food(
-        carbs >= $foodConstraint.minCarbs,
-        carbs <= $foodConstraint.maxCarbs,
-        fats <= $foodConstraint.maxFats,
-        glycemicIndex >= 70
-    )
-then
-    String message = "No suitable high GI food found, consider drinking a glass of juice for quick glucose boost.";
     sugg.send( new Suggestion(message) );
     retract($foodConstraint);
 end

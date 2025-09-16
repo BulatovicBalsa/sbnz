@@ -55,6 +55,10 @@ public class RuleEngineSession {
         String trendClassifyDrl = loadTemplate("/rules/trend-classify.drt", this::loadTrendClassifyData);
         kieHelper.addContent(trendClassifyDrl, ResourceType.DRL);
 
+        // Compile "suggest if no food" fallback rules
+        String suggestNoFoodDrl = loadTemplate("/rules/suggest-no-food.drt", this::loadSuggestNoFoodData);
+        kieHelper.addContent(suggestNoFoodDrl, ResourceType.DRL);
+
         // Add base rules
         InputStream basicRules = RuleEngineSession.class.getResourceAsStream("/rules/basic.drl");
         Resource basicResource = ResourceFactory.newInputStreamResource(basicRules);
@@ -160,6 +164,29 @@ public class RuleEngineSession {
             ));
         }
 
+        return templates;
+    }
+
+    @SneakyThrows
+    private List<SuggestNoFoodTemplate> loadSuggestNoFoodData() {
+        InputStream csv = RuleEngineSession.class.getResourceAsStream("/rules/suggest-no-food.csv");
+        assert csv != null;
+
+        List<SuggestNoFoodTemplate> templates = new java.util.ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(csv));
+
+        String line;
+        reader.readLine(); // Skip header
+        while ((line = reader.readLine()) != null) {
+            if (line.trim().isEmpty()) continue;
+            String[] parts = line.split("\\|");
+            templates.add(new SuggestNoFoodTemplate(
+                parts[0],
+                GlycemicIndexType.valueOf(parts[1]),
+                parts[2],
+                parts[3]
+            ));
+        }
         return templates;
     }
 

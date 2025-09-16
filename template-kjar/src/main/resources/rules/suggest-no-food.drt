@@ -1,0 +1,32 @@
+template header
+name
+giType
+giCondition
+message
+
+package com.ftn.sbnz.gcm.rules
+
+import com.ftn.sbnz.gcm.model.models.FoodConstraint;
+import com.ftn.sbnz.gcm.model.models.Food;
+import com.ftn.sbnz.gcm.model.enums.GlycemicIndexType;
+import com.ftn.sbnz.gcm.model.models.Suggestion;
+
+// Template for fall-back suggestions when no suitable food is found for a GI category
+
+template "suggest-no-food"
+
+rule "Suggest @{name} if No Food Found"
+when
+    $foodConstraint: FoodConstraint( glycemicIndexType == GlycemicIndexType.@{giType} )
+    not Food(
+        carbs >= $foodConstraint.minCarbs,
+        carbs <= $foodConstraint.maxCarbs,
+        fats <= $foodConstraint.maxFats,
+        @{giCondition}
+    )
+then
+    sugg.send( new Suggestion("@{message}") );
+    retract($foodConstraint);
+end
+
+end template
